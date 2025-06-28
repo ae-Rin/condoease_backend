@@ -1,0 +1,45 @@
+{
+  "name": "condoease",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "concurrently \"node server.js\" \"npm run dev\"",
+    "dev": "concurrently \"node server.js\" \"cd condoease && vite --mode web\"",
+    "server": "node server.js",
+    "client": "cd condoease && npm run dev",
+    "start-mobile": "cross-env PORT=3001 react-scripts start",
+    "start-web": "cross-env PORT=3000 react-scripts start",
+    "dev:mobile": "vite --mode mobile",
+    "dev:web": "vite --mode web"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ae-Rin/condoease.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ae-Rin/condoease/issues"
+  },
+  "description": "",
+  "dependencies": {
+    "@coreui/react": "^5.7.0",
+    "bcrypt": "^6.0.0",
+    "bootstrap-icons": "^1.13.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.0",
+    "mysql2": "^3.14.1",
+    "sib-api-v3-sdk": "^8.5.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "vite": "^6.3.5"
+  }
+}
