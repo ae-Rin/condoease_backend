@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const mysql = require('mysql2/promise');
+const sql = require('mssql');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
@@ -52,24 +52,33 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// MySQL Connection
-let db;
+// Azure SQL Connection
+const dbConfig = {
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  server: process.env.DB_SERVER,
+  port: parseInt(process.env.DB_PORT),
+  database: process.env.DB_NAME,
+  authentication: {
+    type: 'default',
+  },
+  options: {
+    encrypt: true,
+    trustServerCertificate: false,
+  },
+}
+
+let db
 async function initDb() {
   try {
-    db = await mysql.createConnection({
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASS,
-      database: process.env.DB_NAME,
-      port: 3306,
-    });
-    console.log('Connected to MySQL');
+    db = await sql.connect(dbConfig)
+    console.log('Azure SQL DB connected!')
   } catch (err) {
-    console.error('DB connection error:', err);
-    process.exit(1);
+    console.error('Azure DB Connection Error:', err)
+    process.exit(1)
   }
 }
-initDb();
+initDb()
 
 // JWT Auth Middleware
 function authenticateToken(req, res, next) {

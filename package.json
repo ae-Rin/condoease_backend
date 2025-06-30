@@ -23,7 +23,6 @@
   "bugs": {
     "url": "https://github.com/ae-Rin/condoease/issues"
   },
-  "description": "",
   "dependencies": {
     "@coreui/react": "^5.7.0",
     "bcrypt": "^6.0.0",
@@ -32,6 +31,7 @@
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
+    "mssql": "^11.0.1",
     "multer": "^2.0.0",
     "mysql2": "^3.14.1",
     "sib-api-v3-sdk": "^8.5.0",
@@ -41,5 +41,7 @@
   "devDependencies": {
     "concurrently": "^9.1.2",
     "vite": "^6.3.5"
-  }
+  },
+  "homepage": "https://github.com/ae-Rin/condoease#readme",
+  "description": ""
 }
