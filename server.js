@@ -103,7 +103,7 @@ app.post('/api/registerstep2', async (req, res) => {
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    await db.query(
+    await db.request().query(
       'INSERT INTO users (first_name, last_name, email, password) VALUES (?, ?, ?, ?)',
       [firstName, lastName, email, hashedPassword]
     );
@@ -120,14 +120,14 @@ app.post('/api/registerstep2', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    const [rows] = await db.request().query('SELECT * FROM users WHERE email = ?', [email]);
     if (!rows.length) return res.status(401).json({ error: 'Invalid email or password' });
 
     const user = rows[0];
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ error: 'Invalid email or password' });
 
-    const [announcements] = await db.query(
+    const [announcements] = await db.request().query(
       'SELECT * FROM post_announcements WHERE user_id = ? ORDER BY created_at DESC',
       [user.id]
     );
@@ -159,7 +159,7 @@ app.put('/api/users/avatar', authenticateToken, upload.single('avatar'), async (
   const avatarPath = `/uploads/${req.file.filename}`;
 
   try {
-    await db.query('UPDATE users SET avatar = ? WHERE id = ?', [avatarPath, userId]);
+    await db.request().query('UPDATE users SET avatar = ? WHERE id = ?', [avatarPath, userId]);
     res.json({ avatar: avatarPath });
   } catch (err) {
     console.error('Avatar update error:', err);
@@ -176,7 +176,7 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
     const fields = [];
     const values = [];
 
-    const [rows] = await db.query('SELECT password FROM users WHERE id = ?', [id]);
+    const [rows] = await db.request().query('SELECT password FROM users WHERE id = ?', [id]);
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
 
     const storedHashedPassword = rows[0].password;
@@ -206,7 +206,7 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
     }
 
     values.push(id);
-    await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, values);
+    await db.request().query(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, values);
 
     res.json({ success: true, updated: { firstName, lastName, email } });
   } catch (err) {
@@ -218,7 +218,7 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
 // Get All Tenants
 app.get('/api/tenants', authenticateToken, async (req, res) => {
   try {
-    const [results] = await db.query('SELECT * FROM tenants');
+    const [results] = await db.request().query('SELECT * FROM tenants');
     res.json(results);
   } catch (err) {
     console.error('Fetch tenants error:', err);
@@ -229,7 +229,7 @@ app.get('/api/tenants', authenticateToken, async (req, res) => {
 // Get All Property Owners
 app.get('/api/property-owners', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM property_owners');
+    const [rows] = await db.request().query('SELECT * FROM property_owners');
     res.json(rows);
   } catch (err) {
     console.error('Error fetching all property owners:', err);
@@ -240,7 +240,7 @@ app.get('/api/property-owners', authenticateToken, async (req, res) => {
 // GET: All Properties
 app.get('/api/properties', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM properties');
+    const [rows] = await db.request().query('SELECT * FROM properties');
     res.json(rows);
   } catch (err) {
     console.error('Error fetching properties:', err);
@@ -251,7 +251,7 @@ app.get('/api/properties', authenticateToken, async (req, res) => {
 // GET: Property Units (with joined property name)
 app.get('/api/property-units', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const [rows] = await db.request().query(`
       SELECT 
         property_units.property_unit_id,
         property_units.property_id,
@@ -273,7 +273,7 @@ app.get('/api/property-units', authenticateToken, async (req, res) => {
 // GET: All Lease Records
 app.get('/api/leases', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const [rows] = await db.request().query(`
       SELECT 
         lt.*, 
         p.property_name, 
@@ -321,7 +321,7 @@ app.post('/api/tenants', authenticateToken, upload.single('id_document'), async 
       emergency_contact_name, emergency_contact_number, unit_number, move_in_date, lease_term, monthly_rent
     ];
 
-    await db.query(query, values);
+    await db.request().query(query, values);
     res.json({ success: true, message: 'Tenant record inserted.' });
   } catch (err) {
     console.error('Insert tenant error:', err);
@@ -335,7 +335,7 @@ app.post('/api/tenants', authenticateToken, upload.single('id_document'), async 
 // GET: ID Types
 app.get('/api/id-types', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, type FROM id_types');
+    const [rows] = await db.request().query('SELECT id, type FROM id_types');
     res.json(rows);
   } catch (err) {
     console.error('Error fetching ID types:', err);
@@ -346,7 +346,7 @@ app.get('/api/id-types', authenticateToken, async (req, res) => {
 // GET: Occupation Statuses
 app.get('/api/occupation-statuses', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, status FROM occupation_statuses');
+    const [rows] = await db.request().query('SELECT id, status FROM occupation_statuses');
     res.json(rows);
   } catch (err) {
     console.error('Error fetching occupation statuses:', err);
@@ -357,7 +357,7 @@ app.get('/api/occupation-statuses', authenticateToken, async (req, res) => {
 // GET: Units (Only available units)
 app.get('/api/units', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, unit_number FROM units WHERE is_occupied = 0');
+    const [rows] = await db.request().query('SELECT id, unit_number FROM units WHERE is_occupied = 0');
     res.json(rows);
   } catch (err) {
     console.error('Error fetching units:', err);
@@ -368,7 +368,7 @@ app.get('/api/units', authenticateToken, async (req, res) => {
 // GET: Emergency Contact Relations
 app.get('/api/emergency-contact-relations', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, relation FROM emergency_contact_relations');
+    const [rows] = await db.request().query('SELECT id, relation FROM emergency_contact_relations');
     res.json(rows);
   } catch (err) {
     console.error('Error fetching emergency contact relations:', err);
@@ -383,12 +383,12 @@ app.post('/api/announcements', authenticateToken, upload.single('file'), async (
     const fileUrl = req.file ? `/uploads/${req.file.filename}` : null;
     const userId = req.user.id;
 
-    const [result] = await db.query(
+    const [result] = await db.request().query(
       'INSERT INTO post_announcements (title, description, file_url, user_id) VALUES (?, ?, ?, ?)',
       [title, description, fileUrl, userId]
     );
 
-    const [newPost] = await db.query('SELECT * FROM post_announcements WHERE id = ?', [result.insertId]);
+    const [newPost] = await db.request().query('SELECT * FROM post_announcements WHERE id = ?', [result.insertId]);
     io.emit('new_announcement', newPost[0]);
     res.json(newPost[0]);
   } catch (err) {
@@ -399,7 +399,7 @@ app.post('/api/announcements', authenticateToken, upload.single('file'), async (
 
 app.get('/api/announcements', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query(
+    const [rows] = await db.request().query(
       'SELECT * FROM post_announcements WHERE user_id = ? ORDER BY created_at DESC',
       [req.user.id]
     );
@@ -415,13 +415,13 @@ app.put('/api/announcements/:id', authenticateToken, upload.single('file'), asyn
   const newFile = req.file ? `/uploads/${req.file.filename}` : null;
 
   try {
-    const [rows] = await db.query('SELECT file_url FROM post_announcements WHERE id = ?', [id]);
+    const [rows] = await db.request().query('SELECT file_url FROM post_announcements WHERE id = ?', [id]);
     if (!rows.length) return res.status(404).json({ error: 'Announcement not found' });
 
     const oldFileUrl = rows[0].file_url;
     const fileToUse = newFile || oldFileUrl;
 
-    await db.query(
+    await db.request().query(
       'UPDATE post_announcements SET title = ?, description = ?, file_url = ? WHERE id = ?',
       [title, description, fileToUse, id]
     );
@@ -433,7 +433,7 @@ app.put('/api/announcements/:id', authenticateToken, upload.single('file'), asyn
       });
     }
 
-    const [updated] = await db.query('SELECT * FROM post_announcements WHERE id = ?', [id]);
+    const [updated] = await db.request().query('SELECT * FROM post_announcements WHERE id = ?', [id]);
     io.emit('announcement_updated', updated[0]);
     res.json(updated[0]);
   } catch (err) {
@@ -444,10 +444,10 @@ app.put('/api/announcements/:id', authenticateToken, upload.single('file'), asyn
 app.delete('/api/announcements/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
-    const [rows] = await db.query('SELECT file_url FROM post_announcements WHERE id = ?', [id]);
+    const [rows] = await db.request().query('SELECT file_url FROM post_announcements WHERE id = ?', [id]);
     const fileUrl = rows[0]?.file_url;
 
-    await db.query('DELETE FROM post_announcements WHERE id = ?', [id]);
+    await db.request().query('DELETE FROM post_announcements WHERE id = ?', [id]);
 
     if (fileUrl) {
       const filePath = path.join(__dirname, fileUrl);
@@ -466,7 +466,7 @@ app.delete('/api/announcements/:id', authenticateToken, async (req, res) => {
 // Get All Users
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, first_name, last_name, email, avatar FROM users');
+    const [rows] = await db.request().query('SELECT id, first_name, last_name, email, avatar FROM users');
     res.json(rows);
   } catch (err) {
     console.error('Fetch users error:', err);
