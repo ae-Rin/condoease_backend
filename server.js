@@ -1,53 +1,57 @@
-const express = require('express')
-const cors = require('cors')
-const sql = require('mssql')
-const path = require('path')
-const multer = require('multer')
-const fs = require('fs')
-const bcrypt = require('bcrypt')
-const jwt = require('jsonwebtoken')
-const http = require('http')
-require('dotenv').config()
-const JWT_SECRET = process.env.JWT_SECRET
+const express = require("express");
+const cors = require("cors");
+const sql = require("mssql");
+const path = require("path");
+const multer = require("multer");
+const fs = require("fs");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const http = require("http");
+require("dotenv").config();
+const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
-  console.error("❌ JWT_SECRET is not defined in environment variables.")
-  process.exit(1)
+  console.error("❌ JWT_SECRET is not defined in environment variables.");
+  process.exit(1);
 }
 
 // Initialize app and server
-const app = express()
-const server = http.createServer(app)
+const app = express();
+const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGINS?.split(','),
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: process.env.CORS_ORIGINS?.split(","),
+    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   },
-})
+});
 
 // Middleware
-app.use(cors({
-  origin: process.env.CORS_ORIGINS?.split(','),
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true,
-}))
-app.use(express.json())
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGINS?.split(","),
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
+app.use(express.json());
 
 // Ensure uploads directory exists
-const uploadDir = path.resolve(__dirname, 'uploads')
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir)
-app.use('/uploads', express.static(uploadDir))
+const uploadDir = path.resolve(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+app.use("/uploads", express.static(uploadDir));
 
 // Multer storage setup
 const storage = multer.diskStorage({
   destination: (_, __, cb) => cb(null, uploadDir),
   filename: (_, file, cb) => {
-    const sanitized = file.originalname.replace(/\s+/g, '_').replace(/[^\w.-]/g, '')
-    cb(null, Date.now() + '-' + sanitized)
+    const sanitized = file.originalname
+      .replace(/\s+/g, "_")
+      .replace(/[^\w.-]/g, "");
+    cb(null, Date.now() + "-" + sanitized);
   },
-})
-const upload = multer({ storage })
+});
+const upload = multer({ storage });
 
 // Azure SQL Connection
 const dbConfig = {
@@ -56,57 +60,57 @@ const dbConfig = {
   server: process.env.DB_SERVER,
   port: parseInt(process.env.DB_PORT),
   database: process.env.DB_NAME,
-  authentication: { type: 'default' },
+  authentication: { type: "default" },
   options: { encrypt: true, trustServerCertificate: false },
-}
+};
 
-let db
+let db;
 async function initDb() {
   try {
-    db = await sql.connect(dbConfig)
-    console.log('Azure SQL DB connected!')
+    db = await sql.connect(dbConfig);
+    console.log("Azure SQL DB connected!");
   } catch (err) {
-    console.error('Azure DB Connection Error:', err)
-    process.exit(1)
+    console.error("Azure DB Connection Error:", err);
+    process.exit(1);
   }
 }
-initDb()
+initDb();
 
 // JWT Auth Middleware
 function authenticateToken(req, res, next) {
-  const token = req.headers['authorization']?.split(' ')[1]
-  if (!token) return res.sendStatus(401)
+  const token = req.headers["authorization"]?.split(" ")[1];
+  if (!token) return res.sendStatus(401);
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403)
-    req.user = user
-    next()
-  })
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
 }
 
 // ======= ROUTES START ======= //
 
 // Register
-app.post('/api/registerstep2', async (req, res) => {
-  const { firstName, lastName, email, password } = req.body
+app.post("/api/registerstep2", async (req, res) => {
+  const { firstName, lastName, email, password } = req.body;
   if (!firstName || !lastName || !email || !password)
-    return res.status(400).json({ error: 'All fields are required' })
+    return res.status(400).json({ error: "All fields are required" });
 
   try {
-    const hashedPassword = await bcrypt.hash(password, 10)
-    await db.request()
-      .input('firstName', sql.VarChar, firstName)
-      .input('lastName', sql.VarChar, lastName)
-      .input('email', sql.VarChar, email)
-      .input('password', sql.VarChar, hashedPassword)
-      .query(`
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await db
+      .request()
+      .input("firstName", sql.VarChar, firstName)
+      .input("lastName", sql.VarChar, lastName)
+      .input("email", sql.VarChar, email)
+      .input("password", sql.VarChar, hashedPassword).query(`
         INSERT INTO users (first_name, last_name, email, password)
         VALUES (@firstName, @lastName, @email, @password)
-      `)
-    res.json({ success: true })
+      `);
+    res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: err.message });
   }
-})
+});
 
 // Login
 app.post("/api/login", async (req, res) => {
@@ -114,145 +118,164 @@ app.post("/api/login", async (req, res) => {
   // console.log("[Login Attempt]", email);
 
   try {
-    const pool = await sql.connect(dbConfig)
+    const pool = await sql.connect(dbConfig);
     const result = await pool
       .request()
       .input("email", sql.VarChar, email)
-      .query("SELECT * FROM users WHERE email = @email")
+      .query("SELECT * FROM users WHERE email = @email");
 
     const user = result.recordset[0];
     if (!user)
-      return res.status(401).json({ error: "Invalid email or password" })
+      return res.status(401).json({ error: "Invalid email or password" });
 
-    const match = await bcrypt.compare(password, user.password)
-    if (!match)
-      return res.status(401).json({ error: "Incorrect password" })
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.status(401).json({ error: "Incorrect password" });
 
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: "2h",
-    })
+    });
 
-    res.json({ token, user })
+    res.json({ token, user });
   } catch (err) {
-    res.status(500).json({ error: "Server error" })
+    res.status(500).json({ error: "Server error" });
   }
-})
+});
 
 // Update Avatar
-app.put('/api/users/avatar', authenticateToken, upload.single('avatar'), async (req, res) => {
-  const userId = req.user.id
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+app.put(
+  "/api/users/avatar",
+  authenticateToken,
+  upload.single("avatar"),
+  async (req, res) => {
+    const userId = req.user.id;
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-  const avatarPath = `/uploads/${req.file.filename}`
-  try {
-    await db.request()
-      .input('avatar', sql.VarChar, avatarPath)
-      .input('userId', sql.Int, userId)
-      .query('UPDATE users SET avatar = @avatar WHERE id = @userId')
-    res.json({ avatar: avatarPath })
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update avatar' })
+    const avatarPath = `/uploads/${req.file.filename}`;
+    try {
+      await db
+        .request()
+        .input("avatar", sql.VarChar, avatarPath)
+        .input("userId", sql.Int, userId)
+        .query("UPDATE users SET avatar = @avatar WHERE id = @userId");
+      res.json({ avatar: avatarPath });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update avatar" });
+    }
   }
-})
+);
 
 // Update User Profile
-app.put('/api/users/:id', authenticateToken, async (req, res) => {
-  const { id } = req.params
-  const { firstName, lastName, email, password, currentPassword } = req.body
+app.put("/api/users/:id", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { firstName, lastName, email, password, currentPassword } = req.body;
 
   try {
-    const result = await db.request()
-      .input('id', sql.Int, id)
-      .query('SELECT password FROM users WHERE id = @id')
+    const result = await db
+      .request()
+      .input("id", sql.Int, id)
+      .query("SELECT password FROM users WHERE id = @id");
 
-    const storedHashedPassword = result.recordset[0]?.password
-    if (!storedHashedPassword) return res.status(404).json({ error: 'User not found' })
+    const storedHashedPassword = result.recordset[0]?.password;
+    if (!storedHashedPassword)
+      return res.status(404).json({ error: "User not found" });
 
-    const fields = []
-    const updates = {}
+    const fields = [];
+    const updates = {};
 
     if (firstName && lastName) {
-      fields.push('first_name = @firstName', 'last_name = @lastName')
-      updates.firstName = firstName
-      updates.lastName = lastName
+      fields.push("first_name = @firstName", "last_name = @lastName");
+      updates.firstName = firstName;
+      updates.lastName = lastName;
     }
 
     if (email && password) {
-      const match = await bcrypt.compare(password, storedHashedPassword)
-      if (!match) return res.status(401).json({ error: 'Incorrect password' })
-      fields.push('email = @newEmail')
-      updates.newEmail = email
+      const match = await bcrypt.compare(password, storedHashedPassword);
+      if (!match) return res.status(401).json({ error: "Incorrect password" });
+      fields.push("email = @newEmail");
+      updates.newEmail = email;
     }
 
     if (currentPassword && password && currentPassword !== password) {
-      const match = await bcrypt.compare(currentPassword, storedHashedPassword)
-      if (!match) return res.status(401).json({ error: 'Incorrect current password' })
-      const hashed = await bcrypt.hash(password, 10)
-      fields.push('password = @newPassword')
-      updates.newPassword = hashed
+      const match = await bcrypt.compare(currentPassword, storedHashedPassword);
+      if (!match)
+        return res.status(401).json({ error: "Incorrect current password" });
+      const hashed = await bcrypt.hash(password, 10);
+      fields.push("password = @newPassword");
+      updates.newPassword = hashed;
     }
 
-    if (!fields.length) return res.status(400).json({ error: 'No fields to update' })
+    if (!fields.length)
+      return res.status(400).json({ error: "No fields to update" });
 
-    let updateReq = db.request().input('id', sql.Int, id)
-    if (updates.firstName) updateReq = updateReq.input('firstName', sql.VarChar, updates.firstName)
-    if (updates.lastName) updateReq = updateReq.input('lastName', sql.VarChar, updates.lastName)
-    if (updates.newEmail) updateReq = updateReq.input('newEmail', sql.VarChar, updates.newEmail)
-    if (updates.newPassword) updateReq = updateReq.input('newPassword', sql.VarChar, updates.newPassword)
+    let updateReq = db.request().input("id", sql.Int, id);
+    if (updates.firstName)
+      updateReq = updateReq.input("firstName", sql.VarChar, updates.firstName);
+    if (updates.lastName)
+      updateReq = updateReq.input("lastName", sql.VarChar, updates.lastName);
+    if (updates.newEmail)
+      updateReq = updateReq.input("newEmail", sql.VarChar, updates.newEmail);
+    if (updates.newPassword)
+      updateReq = updateReq.input(
+        "newPassword",
+        sql.VarChar,
+        updates.newPassword
+      );
 
-    await updateReq.query(`UPDATE users SET ${fields.join(', ')} WHERE id = @id`)
-    res.json({ success: true })
+    await updateReq.query(
+      `UPDATE users SET ${fields.join(", ")} WHERE id = @id`
+    );
+    res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: 'Update failed' })
+    res.status(500).json({ error: "Update failed" });
   }
-})
+});
 
 // Get All Tenants
-app.get('/api/tenants', authenticateToken, async (req, res) => {
+app.get("/api/tenants", authenticateToken, async (req, res) => {
   try {
-    const result = await db.request().query('SELECT * FROM tenants')
-    res.json(result.recordset)
+    const result = await db.request().query("SELECT * FROM tenants");
+    res.json(result.recordset);
   } catch (err) {
-    res.status(500).json({ error: 'Database error' })
+    res.status(500).json({ error: "Database error" });
   }
-})
+});
 
 // Get All Property Owners
-app.get('/api/property-owners', authenticateToken, async (req, res) => {
+app.get("/api/property-owners", authenticateToken, async (req, res) => {
   try {
-    const result = await db.request().query('SELECT * FROM property_owners')
-    res.json(result.recordset)
+    const result = await db.request().query("SELECT * FROM property_owners");
+    res.json(result.recordset);
   } catch (err) {
-    res.status(500).json({ error: 'Server error' })
+    res.status(500).json({ error: "Server error" });
   }
-})
+});
 
 // GET: All Properties
-app.get('/api/properties', authenticateToken, async (req, res) => {
+app.get("/api/properties", authenticateToken, async (req, res) => {
   try {
-    const result = await db.request().query('SELECT * FROM properties')
-    res.json(result.recordset)
+    const result = await db.request().query("SELECT * FROM properties");
+    res.json(result.recordset);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch properties' })
+    res.status(500).json({ error: "Failed to fetch properties" });
   }
-})
+});
 
 // GET: Property Units (with joined property name)
-app.get('/api/property-units', authenticateToken, async (req, res) => {
+app.get("/api/property-units", authenticateToken, async (req, res) => {
   try {
     const result = await db.request().query(`
       SELECT pu.*, p.property_name
       FROM property_units pu
       JOIN properties p ON pu.property_id = p.property_id
-    `)
-    res.json(result.recordset)
+    `);
+    res.json(result.recordset);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch units' })
+    res.status(500).json({ error: "Failed to fetch units" });
   }
-})
+});
 
 // GET: All Lease Records
-app.get('/api/leases', authenticateToken, async (req, res) => {
+app.get("/api/leases", authenticateToken, async (req, res) => {
   try {
     const result = await db.request().query(`
       SELECT lt.*, p.property_name, pu.unit_number, pu.unit_type, t.email
@@ -261,12 +284,12 @@ app.get('/api/leases', authenticateToken, async (req, res) => {
       LEFT JOIN property_units pu ON lt.property_unit_id = pu.property_unit_id
       LEFT JOIN tenants t ON lt.tenant_id = t.tenant_id
       ORDER BY lt.created_at DESC
-    `)
-    res.json(result.recordset)
+    `);
+    res.json(result.recordset);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch leases' })
+    res.status(500).json({ error: "Failed to fetch leases" });
   }
-})
+});
 
 // Insert Tenant
 app.post(
@@ -344,8 +367,6 @@ app.post(
     }
   }
 );
-
-
 
 // Announcements CRUD
 app.post(
@@ -465,11 +486,11 @@ app.delete("/api/announcements/:id", authenticateToken, async (req, res) => {
 
 // Fallback 404
 app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' })
-})
+  res.status(404).json({ error: "Route not found" });
+});
 
 // Server listener
-const PORT = process.env.PORT || 10000
+const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-})
+  console.log(`Server running on port ${PORT}`);
+});
