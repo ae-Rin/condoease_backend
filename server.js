@@ -115,7 +115,6 @@ app.post("/api/registerstep2", async (req, res) => {
 // Login
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
-  // console.log("[Login Attempt]", email);
 
   try {
     const pool = await sql.connect(dbConfig);
