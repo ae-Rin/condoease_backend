@@ -97,19 +97,22 @@ app.post("/api/registerstep2", async (req, res) => {
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
+
     await db
       .request()
       .input("firstName", sql.VarChar, firstName)
       .input("lastName", sql.VarChar, lastName)
       .input("email", sql.VarChar, email)
       .input("password", sql.VarChar, hashedPassword)
-      .input("role", sql.VarChar, "tenant") // default role
+      .input("role", sql.VarChar, "tenant") // tenant default role
       .query(`
         INSERT INTO users (first_name, last_name, email, password, role)
         VALUES (@firstName, @lastName, @email, @password, @role)
       `);
+
     res.json({ success: true });
   } catch (err) {
+    console.error("Registration error:", err);
     res.status(500).json({ error: err.message });
   }
 });
