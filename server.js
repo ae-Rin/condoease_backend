@@ -102,9 +102,11 @@ app.post("/api/registerstep2", async (req, res) => {
       .input("firstName", sql.VarChar, firstName)
       .input("lastName", sql.VarChar, lastName)
       .input("email", sql.VarChar, email)
-      .input("password", sql.VarChar, hashedPassword).query(`
-        INSERT INTO users (first_name, last_name, email, password)
-        VALUES (@firstName, @lastName, @email, @password)
+      .input("password", sql.VarChar, hashedPassword)
+      .input("role", sql.VarChar, "tenant") // default role
+      .query(`
+        INSERT INTO users (first_name, last_name, email, password, role)
+        VALUES (@firstName, @lastName, @email, @password, @role)
       `);
     res.json({ success: true });
   } catch (err) {
