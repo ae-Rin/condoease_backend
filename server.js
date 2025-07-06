@@ -249,7 +249,8 @@ app.get("/api/tenants", authenticateToken, async (req, res) => {
     const result = await db.request().query("SELECT * FROM tenants");
     res.json(result.recordset);
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    console.error("Fetch tenants error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
