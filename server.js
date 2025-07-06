@@ -10,7 +10,6 @@ const http = require("http");
 require("dotenv").config();
 const JWT_SECRET = process.env.JWT_SECRET;
 
-app.options("*", cors()) 
 if (!JWT_SECRET) {
   console.error("❌ JWT_SECRET is not defined in environment variables.");
   process.exit(1);
@@ -18,6 +17,7 @@ if (!JWT_SECRET) {
 
 // Initialize app and server
 const app = express();
+app.options("*", cors()) 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
