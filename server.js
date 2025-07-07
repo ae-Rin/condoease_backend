@@ -304,198 +304,198 @@ app.get("/api/leases", authenticateToken, async (req, res) => {
   }
 });
 
-// Insert Tenant
-app.post(
-  "/api/tenants",
-  authenticateToken,
-  upload.single("id_document"),
-  async (req, res) => {
-    try {
-      const user_id = req.user.id;
-      const {
-        last_name,
-        first_name,
-        email,
-        contact_number,
-        street,
-        barangay,
-        city,
-        province,
-        id_type,
-        id_number,
-        occupation_status,
-        occupation_place,
-        emergency_contact_name,
-        emergency_contact_number,
-        unit_number,
-        move_in_date,
-        lease_term,
-        monthly_rent,
-      } = req.body;
+// // Insert Tenant
+// app.post(
+//   "/api/tenants",
+//   authenticateToken,
+//   upload.single("id_document"),
+//   async (req, res) => {
+//     try {
+//       const user_id = req.user.id;
+//       const {
+//         last_name,
+//         first_name,
+//         email,
+//         contact_number,
+//         street,
+//         barangay,
+//         city,
+//         province,
+//         id_type,
+//         id_number,
+//         occupation_status,
+//         occupation_place,
+//         emergency_contact_name,
+//         emergency_contact_number,
+//         unit_number,
+//         move_in_date,
+//         lease_term,
+//         monthly_rent,
+//       } = req.body;
 
-      const id_document = req.file ? `/uploads/${req.file.filename}` : null;
+//       const id_document = req.file ? `/uploads/${req.file.filename}` : null;
 
-      const query = `
-      INSERT INTO tenants (
-        user_id, last_name, first_name, email, contact_number,
-        street, barangay, city, province, id_type, id_number, id_document,
-        occupation_status, occupation_place, emergency_contact_name, emergency_contact_number,
-        unit_number, move_in_date, lease_term, monthly_rent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+//       const query = `
+//       INSERT INTO tenants (
+//         user_id, last_name, first_name, email, contact_number,
+//         street, barangay, city, province, id_type, id_number, id_document,
+//         occupation_status, occupation_place, emergency_contact_name, emergency_contact_number,
+//         unit_number, move_in_date, lease_term, monthly_rent
+//       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+//     `;
 
-      const values = [
-        user_id,
-        last_name,
-        first_name,
-        email,
-        contact_number,
-        street,
-        barangay,
-        city,
-        province,
-        id_type,
-        id_number,
-        id_document,
-        occupation_status,
-        occupation_place,
-        emergency_contact_name,
-        emergency_contact_number,
-        unit_number,
-        move_in_date,
-        lease_term,
-        monthly_rent,
-      ];
+//       const values = [
+//         user_id,
+//         last_name,
+//         first_name,
+//         email,
+//         contact_number,
+//         street,
+//         barangay,
+//         city,
+//         province,
+//         id_type,
+//         id_number,
+//         id_document,
+//         occupation_status,
+//         occupation_place,
+//         emergency_contact_name,
+//         emergency_contact_number,
+//         unit_number,
+//         move_in_date,
+//         lease_term,
+//         monthly_rent,
+//       ];
 
-      await db.request().query(query, values);
-      res.json({ success: true, message: "Tenant record inserted." });
-    } catch (err) {
-      console.error("Insert tenant error:", err);
-      if (err.code === "ER_DUP_ENTRY") {
-        return res
-          .status(409)
-          .json({ error: "This user already has a tenant record." });
-      }
-      res.status(500).json({ error: "Failed to insert tenant data." });
-    }
-  }
-);
+//       await db.request().query(query, values);
+//       res.json({ success: true, message: "Tenant record inserted." });
+//     } catch (err) {
+//       console.error("Insert tenant error:", err);
+//       if (err.code === "ER_DUP_ENTRY") {
+//         return res
+//           .status(409)
+//           .json({ error: "This user already has a tenant record." });
+//       }
+//       res.status(500).json({ error: "Failed to insert tenant data." });
+//     }
+//   }
+// );
 
-// Announcements CRUD
-app.post(
-  "/api/announcements",
-  authenticateToken,
-  upload.single("file"),
-  async (req, res) => {
-    try {
-      const { title, description } = req.body;
-      const fileUrl = req.file ? `/uploads/${req.file.filename}` : null;
-      const userId = req.user.id;
+// // Announcements CRUD
+// app.post(
+//   "/api/announcements",
+//   authenticateToken,
+//   upload.single("file"),
+//   async (req, res) => {
+//     try {
+//       const { title, description } = req.body;
+//       const fileUrl = req.file ? `/uploads/${req.file.filename}` : null;
+//       const userId = req.user.id;
 
-      const [result] = await db
-        .request()
-        .query(
-          "INSERT INTO post_announcements (title, description, file_url, user_id) VALUES (?, ?, ?, ?)",
-          [title, description, fileUrl, userId]
-        );
+//       const [result] = await db
+//         .request()
+//         .query(
+//           "INSERT INTO post_announcements (title, description, file_url, user_id) VALUES (?, ?, ?, ?)",
+//           [title, description, fileUrl, userId]
+//         );
 
-      const [newPost] = await db
-        .request()
-        .query("SELECT * FROM post_announcements WHERE id = ?", [
-          result.insertId,
-        ]);
-      io.emit("new_announcement", newPost[0]);
-      res.json(newPost[0]);
-    } catch (err) {
-      console.error("Announcement insert error:", err);
-      res.status(500).json({ error: err.message });
-    }
-  }
-);
+//       const [newPost] = await db
+//         .request()
+//         .query("SELECT * FROM post_announcements WHERE id = ?", [
+//           result.insertId,
+//         ]);
+//       io.emit("new_announcement", newPost[0]);
+//       res.json(newPost[0]);
+//     } catch (err) {
+//       console.error("Announcement insert error:", err);
+//       res.status(500).json({ error: err.message });
+//     }
+//   }
+// );
 
-app.get("/api/announcements", authenticateToken, async (req, res) => {
-  try {
-    const [rows] = await db
-      .request()
-      .query(
-        "SELECT * FROM post_announcements WHERE user_id = ? ORDER BY created_at DESC",
-        [req.user.id]
-      );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// app.get("/api/announcements", authenticateToken, async (req, res) => {
+//   try {
+//     const [rows] = await db
+//       .request()
+//       .query(
+//         "SELECT * FROM post_announcements WHERE user_id = ? ORDER BY created_at DESC",
+//         [req.user.id]
+//       );
+//     res.json(rows);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 
-app.put(
-  "/api/announcements/:id",
-  authenticateToken,
-  upload.single("file"),
-  async (req, res) => {
-    const { id } = req.params;
-    const { title, description } = req.body;
-    const newFile = req.file ? `/uploads/${req.file.filename}` : null;
+// app.put(
+//   "/api/announcements/:id",
+//   authenticateToken,
+//   upload.single("file"),
+//   async (req, res) => {
+//     const { id } = req.params;
+//     const { title, description } = req.body;
+//     const newFile = req.file ? `/uploads/${req.file.filename}` : null;
 
-    try {
-      const [rows] = await db
-        .request()
-        .query("SELECT file_url FROM post_announcements WHERE id = ?", [id]);
-      if (!rows.length)
-        return res.status(404).json({ error: "Announcement not found" });
+//     try {
+//       const [rows] = await db
+//         .request()
+//         .query("SELECT file_url FROM post_announcements WHERE id = ?", [id]);
+//       if (!rows.length)
+//         return res.status(404).json({ error: "Announcement not found" });
 
-      const oldFileUrl = rows[0].file_url;
-      const fileToUse = newFile || oldFileUrl;
+//       const oldFileUrl = rows[0].file_url;
+//       const fileToUse = newFile || oldFileUrl;
 
-      await db
-        .request()
-        .query(
-          "UPDATE post_announcements SET title = ?, description = ?, file_url = ? WHERE id = ?",
-          [title, description, fileToUse, id]
-        );
+//       await db
+//         .request()
+//         .query(
+//           "UPDATE post_announcements SET title = ?, description = ?, file_url = ? WHERE id = ?",
+//           [title, description, fileToUse, id]
+//         );
 
-      if (newFile && oldFileUrl && oldFileUrl !== newFile) {
-        const filePath = path.join(__dirname, oldFileUrl);
-        fs.unlink(filePath, (err) => {
-          if (err) console.error("Failed to delete old file:", err);
-        });
-      }
+//       if (newFile && oldFileUrl && oldFileUrl !== newFile) {
+//         const filePath = path.join(__dirname, oldFileUrl);
+//         fs.unlink(filePath, (err) => {
+//           if (err) console.error("Failed to delete old file:", err);
+//         });
+//       }
 
-      const [updated] = await db
-        .request()
-        .query("SELECT * FROM post_announcements WHERE id = ?", [id]);
-      io.emit("announcement_updated", updated[0]);
-      res.json(updated[0]);
-    } catch (err) {
-      res.status(500).json({ error: "Failed to update announcement." });
-    }
-  }
-);
+//       const [updated] = await db
+//         .request()
+//         .query("SELECT * FROM post_announcements WHERE id = ?", [id]);
+//       io.emit("announcement_updated", updated[0]);
+//       res.json(updated[0]);
+//     } catch (err) {
+//       res.status(500).json({ error: "Failed to update announcement." });
+//     }
+//   }
+// );
 
-app.delete("/api/announcements/:id", authenticateToken, async (req, res) => {
-  const { id } = req.params;
-  try {
-    const [rows] = await db
-      .request()
-      .query("SELECT file_url FROM post_announcements WHERE id = ?", [id]);
-    const fileUrl = rows[0]?.file_url;
+// app.delete("/api/announcements/:id", authenticateToken, async (req, res) => {
+//   const { id } = req.params;
+//   try {
+//     const [rows] = await db
+//       .request()
+//       .query("SELECT file_url FROM post_announcements WHERE id = ?", [id]);
+//     const fileUrl = rows[0]?.file_url;
 
-    await db
-      .request()
-      .query("DELETE FROM post_announcements WHERE id = ?", [id]);
+//     await db
+//       .request()
+//       .query("DELETE FROM post_announcements WHERE id = ?", [id]);
 
-    if (fileUrl) {
-      const filePath = path.join(__dirname, fileUrl);
-      fs.unlink(filePath, (err) => {
-        if (err) console.error("File delete error:", err);
-      });
-    }
+//     if (fileUrl) {
+//       const filePath = path.join(__dirname, fileUrl);
+//       fs.unlink(filePath, (err) => {
+//         if (err) console.error("File delete error:", err);
+//       });
+//     }
 
-    io.emit("announcement_deleted", { id: parseInt(id) });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+//     io.emit("announcement_deleted", { id: parseInt(id) });
+//     res.json({ success: true });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 
 // Fallback 404
 app.use((req, res) => {
