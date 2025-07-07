@@ -88,5 +88,5 @@ pyparsing==3.2.3
 MarkupSafe==3.0.2
 click==8.1.8
 colorama==0.4.6
-
+pymssql==2.3.6
 python-multipart==0.0.9
