@@ -29,7 +29,6 @@ const io = new Server(server, {
 
 // Middleware
 const allowedOrigins = process.env.CORS_ORIGINS?.split(",") || []
-
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -247,10 +246,10 @@ app.put("/api/users/:id", authenticateToken, async (req, res) => {
 app.get("/api/tenants", authenticateToken, async (req, res) => {
   try {
     const result = await db.request().query("SELECT * FROM tenants");
-    res.json(result.recordset);
+    res.json(result.recordset); 
   } catch (err) {
     console.error("Fetch tenants error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Database error", detail: err.message });
   }
 });
 
