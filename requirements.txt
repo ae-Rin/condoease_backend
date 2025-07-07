@@ -76,7 +76,7 @@ python-dotenv==1.1.1
 python-jose==3.5.0
 python-jwt==4.1.0
 pyunormalize==16.0.0
-pywin32==310
+#pywin32==310
 regex==2024.11.6
 requests==2.32.3
 requests-toolbelt==0.10.1
