@@ -173,11 +173,16 @@ def update_user_profile(user_id: int, firstName: Optional[str] = Form(None), las
 
 @app.get("/api/tenants")
 def get_all_tenants(token: dict = Depends(verify_token)):
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM tenants")
-    columns = [col[0] for col in cursor.description]
-    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("SELECT * FROM tenants")
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    except Exception as e:
+        print("❌ /api/tenants error:", str(e))
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
 @app.get("/api/property-owners")
 def get_all_property_owners(token: dict = Depends(verify_token)):
