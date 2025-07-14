@@ -215,6 +215,9 @@ def get_all_leases(token: dict = Depends(verify_token)):
     """)
     return cursor.fetchall()
 
+# Specific Mobile Routes
+# @app.get("/api/maintenance-requests")
+
 # 404 Fallback Middleware
 @app.middleware("http")
 async def not_found_middleware(request: Request, call_next):
