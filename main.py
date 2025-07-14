@@ -64,6 +64,13 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    
+class MaintenanceRequest(BaseModel):
+    maintenance_type: str
+    category: str
+    description: str
+    attachment: Optional[str] = None
+
 
 # Token Auth Dependency
 def verify_token(request: Request):
@@ -216,7 +223,36 @@ def get_all_leases(token: dict = Depends(verify_token)):
     return cursor.fetchall()
 
 # Specific Mobile Routes
-# @app.get("/api/maintenance-requests")
+@app.post("/api/maintenance-requests")
+def submit_maintenance_request(
+    request: MaintenanceRequest,
+    token: dict = Depends(verify_token)
+):
+    tenant_id = token.get("id")  # Assumes the logged-in user is a tenant
+
+    db = get_db()
+    cursor = db.cursor()
+
+    try:
+        cursor.execute("""
+            INSERT INTO maintenance_requests (
+                tenant_id, maintenance_type, category, description, attachment, status, created_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, GETDATE(), GETDATE())
+        """, (
+            tenant_id,
+            request.maintenance_type,
+            request.category,
+            request.description,
+            request.attachment or "",
+            "pending"  # default status
+        ))
+        db.commit()
+        return {"success": True, "message": "Maintenance request submitted"}
+    except Exception as e:
+        print("❌ Maintenance request error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to submit maintenance request")
+
 
 # 404 Fallback Middleware
 @app.middleware("http")
