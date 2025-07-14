@@ -1,7 +1,8 @@
 import shutil
 import time
 import os
-from typing import Optional
+from typing import List, Optional
+import uuid
 from fastapi import FastAPI, Form, Request, Depends, HTTPException, status, File, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -224,35 +225,57 @@ def get_all_leases(token: dict = Depends(verify_token)):
 
 # Specific Mobile Routes
 @app.post("/api/maintenance-requests")
-def submit_maintenance_request(
-    request: MaintenanceRequest,
-    token: dict = Depends(verify_token)
+async def submit_maintenance_request(
+    maintenance_type: str = Form(...),
+    category: str = Form(...),
+    description: str = Form(...),
+    files: Optional[List[UploadFile]] = File(None),
+    token: dict = Depends(verify_token),
 ):
-    tenant_id = token.get("id")  # Assumes the logged-in user is a tenant
-
+    tenant_id = token.get("id")
     db = get_db()
     cursor = db.cursor()
 
     try:
+        # 1. Insert into maintenance_requests
         cursor.execute("""
             INSERT INTO maintenance_requests (
-                tenant_id, maintenance_type, category, description, attachment, status, created_at, updated_at
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, GETDATE(), GETDATE())
-        """, (
-            tenant_id,
-            request.maintenance_type,
-            request.category,
-            request.description,
-            request.attachment or "",
-            "pending"  # default status
-        ))
+                tenant_id, maintenance_type, category, description, status, created_at, updated_at
+            ) VALUES (%s, %s, %s, %s, %s, GETDATE(), GETDATE())
+        """, (tenant_id, maintenance_type, category, description, "pending"))
         db.commit()
-        return {"success": True, "message": "Maintenance request submitted"}
+
+        # 2. Get the inserted request ID
+        cursor.execute("SELECT SCOPE_IDENTITY()")
+        request_id = cursor.fetchone()[0]
+
+        # 3. Handle attachments (if any)
+        saved_files = []
+        if files:
+            for upload in files:
+                filename = f"{uuid.uuid4()}_{upload.filename.replace(' ', '_')}"
+                file_path = os.path.join(UPLOAD_DIR, filename)
+                with open(file_path, "wb") as buffer:
+                    shutil.copyfileobj(upload.file, buffer)
+
+                # Insert into maintenance_attachments
+                cursor.execute("""
+                    INSERT INTO maintenance_attachments (request_id, file_url, file_type, uploaded_at)
+                    VALUES (%s, %s, %s, GETDATE())
+                """, (request_id, f"/uploads/{filename}", upload.content_type))
+                saved_files.append(filename)
+
+        db.commit()
+        return {
+            "success": True,
+            "message": "Maintenance request submitted",
+            "request_id": request_id,
+            "attachments": saved_files
+        }
+
     except Exception as e:
         print("❌ Maintenance request error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to submit maintenance request")
-
 
 # 404 Fallback Middleware
 @app.middleware("http")
