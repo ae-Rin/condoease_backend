@@ -223,6 +223,33 @@ def get_all_leases(token: dict = Depends(verify_token)):
     """)
     return cursor.fetchall()
 
+@app.get("/api/maintenance-requests")
+def get_maintenance_requests(token: dict = Depends(verify_token)):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+    try:
+        cursor.execute("""
+            SELECT 
+                mr.request_id,
+                mr.tenant_id,
+                u.first_name,
+                u.last_name,
+                mr.maintenance_type,
+                mr.category,
+                mr.description,
+                mr.status,
+                mr.created_at,
+                mr.updated_at
+            FROM maintenance_requests mr
+            LEFT JOIN users u ON mr.tenant_id = u.id
+            ORDER BY mr.created_at DESC
+        """)
+        requests = cursor.fetchall()
+        return {"requests": requests}
+    except Exception as e:
+        print("❌ Error fetching maintenance requests:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch maintenance requests")
+
 # Specific Mobile Routes
 @app.post("/api/maintenance-requests")
 async def submit_maintenance_request(
