@@ -248,6 +248,37 @@ def get_maintenance_requests(token: dict = Depends(verify_token)):
     except Exception as e:
         print("❌ Error fetching maintenance requests:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance requests")
+    
+@app.get("/api/maintenance-requests/{request_id}")
+def get_maintenance_request_by_id(request_id: int, token: dict = Depends(verify_token)):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+    try:
+        cursor.execute("""
+            SELECT 
+                mr.id AS maintenance_request_id,
+                mr.tenant_id,
+                u.first_name,
+                u.last_name,
+                mr.maintenance_type,
+                mr.category,
+                mr.description,
+                mr.status,
+                mr.created_at,
+                mr.updated_at
+            FROM maintenance_requests mr
+            JOIN users u ON u.id = mr.tenant_id
+            WHERE mr.id = %s
+        """, (request_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Maintenance request not found")
+
+        return result
+    except Exception as e:
+        print("❌ Error fetching request by ID:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch maintenance request")
 
 # Specific Mobile Routes
 @app.post("/api/maintenance-requests")
