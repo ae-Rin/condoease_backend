@@ -275,7 +275,22 @@ def get_maintenance_request_by_id(request_id: int, token: dict = Depends(verify_
         if not result:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
 
+        # Fetch the file attachments for this request
+        cursor.execute("""
+            SELECT 
+                id AS attachment_id,
+                file_url,
+                file_type,
+                uploaded_at
+            FROM maintenance_attachments
+            WHERE request_id = %s
+        """, (request_id,))
+        attachments = cursor.fetchall()
+
+        result["attachments"] = attachments
+
         return result
+
     except Exception as e:
         print("❌ Error fetching request by ID:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance request")
