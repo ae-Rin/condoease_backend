@@ -230,6 +230,7 @@ def get_maintenance_requests(token: dict = Depends(verify_token)):
     try:
         cursor.execute("""
             SELECT 
+                mr.id AS maintenance_request_id,
                 mr.request_id,
                 mr.tenant_id,
                 u.first_name,
@@ -241,7 +242,7 @@ def get_maintenance_requests(token: dict = Depends(verify_token)):
                 mr.created_at,
                 mr.updated_at
             FROM maintenance_requests mr
-            LEFT JOIN users u ON mr.tenant_id = u.id
+            JOIN users u ON u.id = mr.tenant_id
             ORDER BY mr.created_at DESC
         """)
         requests = cursor.fetchall()
