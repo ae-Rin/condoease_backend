@@ -231,7 +231,6 @@ def get_maintenance_requests(token: dict = Depends(verify_token)):
         cursor.execute("""
             SELECT 
                 mr.id AS maintenance_request_id,
-                mr.request_id,
                 mr.tenant_id,
                 u.first_name,
                 u.last_name,
@@ -245,8 +244,7 @@ def get_maintenance_requests(token: dict = Depends(verify_token)):
             JOIN users u ON u.id = mr.tenant_id
             ORDER BY mr.created_at DESC
         """)
-        requests = cursor.fetchall()
-        return {"requests": requests}
+        return {"requests": cursor.fetchall()}
     except Exception as e:
         print("❌ Error fetching maintenance requests:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance requests")
