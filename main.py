@@ -216,7 +216,17 @@ async def create_tenant(
         shutil.copyfileobj(idDocument.file, buffer)
 
     try:
-        # Insert tenant (assuming token['id'] is the user_id from JWT)
+        # Check if user already has a tenant profile
+        cursor.execute("SELECT tenant_id FROM tenants WHERE user_id = %s", (token["id"],))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="This user already has a tenant profile.")
+
+        # Check if email is already used
+        cursor.execute("SELECT tenant_id FROM tenants WHERE email = %s", (email,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Email is already registered.")
+
+        # Insert tenant
         cursor.execute("""
             INSERT INTO tenants (
                 user_id, last_name, first_name, email, contact_number,
@@ -235,6 +245,10 @@ async def create_tenant(
         ))
         db.commit()
         return {"message": "Tenant created successfully"}
+
+    except HTTPException as http_err:
+        raise http_err
+
     except Exception as e:
         db.rollback()
         print("❌ Insert Error:", str(e))
