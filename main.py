@@ -175,6 +175,7 @@ def update_user_profile(user_id: int, firstName: Optional[str] = Form(None), las
     return {"success": True}
 
 router = APIRouter()
+app.include_router(router)
 
 UPLOAD_DIR = "uploads/ids"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
