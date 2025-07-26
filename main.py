@@ -239,8 +239,6 @@ async def create_tenant(
         db.rollback()
         print("❌ Insert Error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to create tenant")
-    
-app.include_router(router)
 
 @app.get("/api/tenants")
 def get_all_tenants(token: dict = Depends(verify_token)):
@@ -417,6 +415,8 @@ async def submit_maintenance_request(
     except Exception as e:
         print("❌ Maintenance request error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to submit maintenance request")
+    
+app.include_router(router)
 
 # 404 Fallback Middleware
 @app.middleware("http")
