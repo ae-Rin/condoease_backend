@@ -3,7 +3,7 @@ import time
 import os
 from typing import List, Optional
 import uuid
-from fastapi import FastAPI, Form, Request, Depends, HTTPException, status, File, UploadFile
+from fastapi import FastAPI, APIRouter, Form, Request, Depends, HTTPException, status, File, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +13,8 @@ from passlib.context import CryptContext
 import pymssql
 from dotenv import load_dotenv
 import uvicorn
+from uuid import uuid4
+from datetime import datetime
 
 # Load .env
 load_dotenv()
@@ -71,7 +73,6 @@ class MaintenanceRequest(BaseModel):
     category: str
     description: str
     attachment: Optional[str] = None
-
 
 # Token Auth Dependency
 def verify_token(request: Request):
@@ -172,6 +173,72 @@ def update_user_profile(user_id: int, firstName: Optional[str] = Form(None), las
     cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = %s", tuple(params))
     db.commit()
     return {"success": True}
+
+router = APIRouter()
+
+UPLOAD_DIR = "uploads/ids"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@router.post("/api/tenants")
+async def create_tenant(
+    lastName: str = Form(...),
+    firstName: str = Form(...),
+    email: str = Form(...),
+    contactNumber: str = Form(...),
+    street: str = Form(...),
+    barangay: str = Form(...),
+    city: str = Form(...),
+    province: str = Form(...),
+    idType: str = Form(...),
+    idNumber: str = Form(...),
+    idDocument: UploadFile = File(...),
+    occupationStatus: str = Form(...),
+    occupationPlace: str = Form(...),
+    emergencyContactName: str = Form(...),
+    emergencyContactNumber: str = Form(...),
+    token: dict = Depends(verify_token),  # assumes tenant is authenticated
+):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    # Check if email already exists in tenants table
+    cursor.execute("SELECT tenant_id FROM tenants WHERE email = %s", (email,))
+    existing = cursor.fetchone()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already exists")
+
+    # Save uploaded file
+    extension = os.path.splitext(idDocument.filename)[-1]
+    filename = f"{uuid4()}{extension}"
+    file_path = os.path.join("uploads", "ids", filename)
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(idDocument.file, buffer)
+
+    try:
+        # Insert tenant (assuming token['id'] is the user_id from JWT)
+        cursor.execute("""
+            INSERT INTO tenants (
+                user_id, last_name, first_name, email, contact_number,
+                street, barangay, city, province,
+                id_type, id_number, id_document,
+                occupation_status, occupation_place,
+                emergency_contact_name, emergency_contact_number,
+                created_at, updated_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, GETDATE(), GETDATE())
+        """, (
+            token["id"], lastName, firstName, email, contactNumber,
+            street, barangay, city, province,
+            idType, idNumber, filename,
+            occupationStatus, occupationPlace,
+            emergencyContactName, emergencyContactNumber
+        ))
+        db.commit()
+        return {"message": "Tenant created successfully"}
+    except Exception as e:
+        db.rollback()
+        print("❌ Insert Error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to create tenant")
 
 @app.get("/api/tenants")
 def get_all_tenants(token: dict = Depends(verify_token)):
