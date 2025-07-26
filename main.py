@@ -175,7 +175,6 @@ def update_user_profile(user_id: int, firstName: Optional[str] = Form(None), las
     return {"success": True}
 
 router = APIRouter()
-app.include_router(router)
 
 UPLOAD_DIR = "uploads/ids"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -240,6 +239,8 @@ async def create_tenant(
         db.rollback()
         print("❌ Insert Error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to create tenant")
+    
+app.include_router(router)
 
 @app.get("/api/tenants")
 def get_all_tenants(token: dict = Depends(verify_token)):
