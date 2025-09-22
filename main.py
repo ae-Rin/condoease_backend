@@ -196,18 +196,18 @@ async def create_tenant(
     occupationPlace: str = Form(...),
     emergencyContactName: str = Form(...),
     emergencyContactNumber: str = Form(...),
-    token: dict = Depends(verify_token),  # assumes tenant is authenticated
+    token: dict = Depends(verify_token),
 ):
     db = get_db()
     cursor = db.cursor(as_dict=True)
 
-    # Check if email already exists in tenants table
-    cursor.execute("SELECT tenant_id FROM tenants WHERE email = %s", (email,))
-    existing = cursor.fetchone()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already exists")
+    # ✅ Step 1: Check if email is already in users
+    cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+    existing_user = cursor.fetchone()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already exists as a user")
 
-    # Save uploaded file
+    # ✅ Step 2: Save uploaded file
     extension = os.path.splitext(idDocument.filename)[-1]
     filename = f"{uuid4()}{extension}"
     file_path = os.path.join("uploads", "ids", filename)
@@ -216,17 +216,18 @@ async def create_tenant(
         shutil.copyfileobj(idDocument.file, buffer)
 
     try:
-        # Check if user already has a tenant profile
-        cursor.execute("SELECT tenant_id FROM tenants WHERE user_id = %s", (token["id"],))
-        if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="This user already has a tenant profile.")
+        # ✅ Step 3: Insert new user (role = tenant)
+        temp_password = pwd_context.hash("changeme123")  # you can replace this with random gen
+        cursor.execute("""
+            INSERT INTO users (first_name, last_name, email, password, role, created_at)
+            VALUES (%s, %s, %s, %s, 'tenant', GETDATE())
+        """, (firstName, lastName, email, temp_password))
+        db.commit()
 
-        # Check if email is already used
-        cursor.execute("SELECT tenant_id FROM tenants WHERE email = %s", (email,))
-        if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Email is already registered.")
+        cursor.execute("SELECT SCOPE_IDENTITY() AS id")
+        new_user_id = cursor.fetchone()["id"]
 
-        # Insert tenant
+        # ✅ Step 4: Insert tenant profile linked to new user
         cursor.execute("""
             INSERT INTO tenants (
                 user_id, last_name, first_name, email, contact_number,
@@ -237,17 +238,15 @@ async def create_tenant(
                 created_at, updated_at
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, GETDATE(), GETDATE())
         """, (
-            token["id"], lastName, firstName, email, contactNumber,
+            new_user_id, lastName, firstName, email, contactNumber,
             street, barangay, city, province,
             idType, idNumber, filename,
             occupationStatus, occupationPlace,
             emergencyContactName, emergencyContactNumber
         ))
         db.commit()
-        return {"message": "Tenant created successfully"}
 
-    except HTTPException as http_err:
-        raise http_err
+        return {"message": "Tenant created successfully", "user_id": new_user_id}
 
     except Exception as e:
         db.rollback()
