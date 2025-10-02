@@ -253,6 +253,93 @@ async def create_tenant(
         print("❌ Insert Error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to create tenant")
 
+UPLOAD_DIR = "uploads/leases"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@router.post("/api/leases")
+async def create_lease(
+    property: int = Form(...),
+    leaseUnits: bool = Form(False),
+    unit: Optional[int] = Form(None),
+    rentPrice: float = Form(...),
+    depositPrice: float = Form(...),
+    tenant: int = Form(...),
+    tenantEmail: str = Form(...),
+    startDate: str = Form(...),
+    endDate: str = Form(...),
+    tenancyTerms: str = Form(...),
+    bills_gas: bool = Form(False),
+    bills_gasAmount: Optional[float] = Form(None),
+    bills_electricity: bool = Form(False),
+    bills_electricityAmount: Optional[float] = Form(None),
+    bills_internet: bool = Form(False),
+    bills_internetAmount: Optional[float] = Form(None),
+    bills_tax: bool = Form(False),
+    bills_taxAmount: Optional[float] = Form(None),
+    leaseDocuments: List[UploadFile] = File([]),
+    token: dict = Depends(verify_token),
+):
+    db = get_db()
+    cursor = db.cursor()
+
+    # Save uploaded docs
+    saved_files = []
+    for doc in leaseDocuments:
+        filename = f"{uuid.uuid4()}-{doc.filename}"
+        filepath = os.path.join(UPLOAD_DIR, filename)
+        with open(filepath, "wb") as buffer:
+            shutil.copyfileobj(doc.file, buffer)
+        saved_files.append(f"/{UPLOAD_DIR}/{filename}")
+
+    # Insert into leases table
+    query = """
+    INSERT INTO leases (
+        property_id, property_unit_id, tenant_id,
+        rent_price, deposit_price, start_date, end_date,
+        tenancy_terms, lease_documents,
+        bill_gas, bill_gas_amount,
+        bill_electricity, bill_electricity_amount,
+        bill_internet, bill_internet_amount,
+        bill_tax, bill_tax_amount
+    )
+    VALUES (
+        %(property_id)s, %(unit)s, %(tenant_id)s,
+        %(rent_price)s, %(deposit_price)s, %(start_date)s, %(end_date)s,
+        %(tenancy_terms)s, %(lease_documents)s,
+        %(bill_gas)s, %(bill_gas_amount)s,
+        %(bill_electricity)s, %(bill_electricity_amount)s,
+        %(bill_internet)s, %(bill_internet_amount)s,
+        %(bill_tax)s, %(bill_tax_amount)s
+    )
+    """
+    params = {
+        "property_id": property,
+        "unit": unit,
+        "tenant_id": tenant,
+        "rent_price": rentPrice,
+        "deposit_price": depositPrice,
+        "start_date": startDate,
+        "end_date": endDate,
+        "tenancy_terms": tenancyTerms,
+        "lease_documents": ",".join(saved_files),
+        "bill_gas": bills_gas,
+        "bill_gas_amount": bills_gasAmount,
+        "bill_electricity": bills_electricity,
+        "bill_electricity_amount": bills_electricityAmount,
+        "bill_internet": bills_internet,
+        "bill_internet_amount": bills_internetAmount,
+        "bill_tax": bills_tax,
+        "bill_tax_amount": bills_taxAmount,
+    }
+
+    try:
+        cursor.execute(query, params)
+        db.commit()
+        return {"message": "Lease created successfully"}
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
+
 @app.get("/api/tenants")
 def get_all_tenants(token: dict = Depends(verify_token)):
     try:
