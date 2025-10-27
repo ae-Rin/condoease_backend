@@ -384,13 +384,14 @@ def get_property_units(token: dict = Depends(verify_token)):
         cursor.execute("""
             SELECT pu.*, p.property_name
             FROM property_units pu
-            JOIN properties p ON pu.property_id = p.property_id
+            JOIN properties p ON pu.property_id = p.id
         """)
-        results = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
         print("✅ Property units fetched:", results)
         return results
     except Exception as e:
-        print("ERROR /api/property-units error:", str(e))
+        print("ERROR /api/property-units:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
