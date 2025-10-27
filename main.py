@@ -376,25 +376,6 @@ def get_property_units(token: dict = Depends(verify_token)):
     """)
     return cursor.fetchall()
 
-# @app.get("/api/property-units")
-# def get_property_units(token: dict = Depends(verify_token)):
-#     try:
-#         db = get_db()
-#         cursor = db.cursor(as_dict=True)
-#         cursor.execute("""
-#             SELECT pu.*, p.property_name
-#             FROM property_units pu
-#             JOIN properties p ON pu.property_id = p.id
-#         """)
-#         columns = [col[0] for col in cursor.description]
-#         results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-#         print("✅ Property units fetched:", results)
-#         return results
-#     except Exception as e:
-#         print("ERROR /api/property-units:", str(e))
-#         raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/api/leases")
 def get_all_leases(token: dict = Depends(verify_token)):
     db = get_db()
