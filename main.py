@@ -392,6 +392,7 @@ def get_property_units(token: dict = Depends(verify_token)):
                 p.property_name
             FROM property_units pu
             JOIN properties p ON pu.property_id = p.id
+            WHERE pu.status = 'vacant'
         """)
         return cursor.fetchall()
     except Exception as e:
