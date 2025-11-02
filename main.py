@@ -376,6 +376,27 @@ def get_property_units(token: dict = Depends(verify_token)):
     """)
     return cursor.fetchall()
 
+@app.get("/api/property-units/vacant")
+def get_property_units(token: dict = Depends(verify_token)):
+    try:
+        db = get_db()
+        cursor = db.cursor(as_dict=True)
+        cursor.execute("""
+            SELECT 
+                pu.property_unit_id,
+                pu.property_id,
+                pu.unit_number,
+                pu.unit_type,
+                pu.rent_price,
+                pu.status,
+                p.property_name
+            FROM property_units pu
+            JOIN properties p ON pu.property_id = p.id
+        """)
+        return cursor.fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/leases")
 def get_all_leases(token: dict = Depends(verify_token)):
     db = get_db()
