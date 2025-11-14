@@ -384,7 +384,7 @@ def get_vacant_property_units(token: dict = Depends(verify_token)):
         cursor.execute("""
             SELECT 
                 pu.property_unit_id,
-                pu.property_id,
+                pu.property_id = p.id,
                 pu.unit_number,
                 pu.unit_type,
                 pu.rent_price,
