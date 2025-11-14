@@ -381,21 +381,17 @@ def get_vacant_property_units(token: dict = Depends(verify_token)):
     try:
         db = get_db()
         cursor = db.cursor(as_dict=True)
-        cursor.execute("""
-            SELECT 
-                pu.property_unit_id,
-                pu.property_id = p.id,
-                pu.unit_number,
-                pu.unit_type,
-                pu.rent_price,
-                pu.status,
-                p.property_name
-            FROM property_units pu
-            JOIN properties p ON pu.property_id = p.id
-            WHERE pu.status = 'vacant'
-        """)
-        return cursor.fetchall()
 
+        query = (
+            "SELECT pu.id AS property_unit_id, pu.property_id, pu.unit_number,"
+            "pu.unit_type, pu.rent_price, pu.status, p.property_name"
+            "FROM property_units pu "
+            "JOIN properties p ON pu.property_id = p.id"
+            "WHERE pu.status = 'vacant'"
+        )
+
+        cursor.execute(query)
+        return cursor.fetchall()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
