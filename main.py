@@ -377,7 +377,7 @@ def get_property_units(token: dict = Depends(verify_token)):
     return cursor.fetchall()
 
 @app.get("/api/property-units/vacant")
-def get_property_units(token: dict = Depends(verify_token)):
+def get_vacant_property_units(token: dict = Depends(verify_token)):
     try:
         db = get_db()
         cursor = db.cursor(as_dict=True)
@@ -395,6 +395,7 @@ def get_property_units(token: dict = Depends(verify_token)):
             WHERE pu.status = 'vacant'
         """)
         return cursor.fetchall()
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
