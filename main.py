@@ -383,17 +383,19 @@ def get_vacant_property_units(token: dict = Depends(verify_token)):
         cursor = db.cursor(as_dict=True)
 
         query = (
-            "SELECT pu.id AS property_unit_id, pu.property_id, pu.unit_number,"
-            "pu.unit_type, pu.rent_price, pu.status, p.property_name"
+            "SELECT pu.id AS property_unit_id, pu.property_id, pu.unit_number, "
+            "pu.unit_type, pu.rent_price, pu.status, p.property_name "
             "FROM property_units pu "
-            "JOIN properties p ON pu.property_id = p.id"
+            "JOIN properties p ON pu.property_id = p.id "
             "WHERE pu.status = 'vacant'"
         )
 
         cursor.execute(query)
         return cursor.fetchall()
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/leases")
 def get_all_leases(token: dict = Depends(verify_token)):
