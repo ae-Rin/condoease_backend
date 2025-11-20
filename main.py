@@ -201,27 +201,25 @@ async def create_tenant(
     db = get_db()
     cursor = db.cursor(as_dict=True)
 
-    # ✅ Step 1: Check if email is already in users
     cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
     existing_user = cursor.fetchone()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already exists as a user")
 
-    # ✅ Step 2: Save uploaded file
     extension = os.path.splitext(idDocument.filename)[-1]
     filename = f"{uuid4()}{extension}"
-    file_path = os.path.join("uploads", "ids", filename)
+    file_path = os.path.join("uploads", "id", "tenants", filename)
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(idDocument.file, buffer)
 
     try:
         # ✅ Step 3: Insert new user (role = tenant)
-        temp_password = pwd_context.hash("changeme123")  # you can replace this with random gen
+        # temp_password = pwd_context.hash("changeme123")  # you can replace this with random gen
         cursor.execute("""
             INSERT INTO users (first_name, last_name, email, password, role, created_at)
             VALUES (%s, %s, %s, %s, 'tenant', GETDATE())
-        """, (firstName, lastName, email, temp_password))
+        """, (firstName, lastName, email))
         db.commit()
 
         cursor.execute("SELECT SCOPE_IDENTITY() AS id")
@@ -272,24 +270,29 @@ async def create_property_owner(
 ):
     db = get_db()
     cursor = db.cursor(as_dict=True)
+    
+    cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+    existing_user = cursor.fetchone()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already exists as a user")
 
     # 1️⃣ CHECK IF EMAIL EXISTS IN USERS TABLE
-    cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
-    user = cursor.fetchone()
+    # cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+    # user = cursor.fetchone()
 
-    if user:
-        user_id = user["id"]
-    else:
-        temp_password_hashed = pwd_context.hash("changeme123")
+    # if user:
+    #     user_id = user["id"]
+    # else:
+    #     temp_password_hashed = pwd_context.hash("changeme123")
 
-        cursor.execute("""
-            INSERT INTO users (first_name, last_name, email, password, role, created_at)
-            VALUES (%s, %s, %s, %s, 'owner', GETDATE())
-        """, (firstName, lastName, email, temp_password_hashed))
-        db.commit()
+    cursor.execute("""
+        INSERT INTO users (first_name, last_name, email, password, role, created_at)
+        VALUES (%s, %s, %s, %s, 'owner', GETDATE())
+    """, (firstName, lastName, email, temp_password_hashed))
+    db.commit()
 
-        cursor.execute("SELECT SCOPE_IDENTITY() AS id")
-        user_id = cursor.fetchone()["id"]
+    cursor.execute("SELECT SCOPE_IDENTITY() AS id")
+    user_id = cursor.fetchone()["id"]
 
     # 2️⃣ HANDLE FILE UPLOAD (Owner's ID Document)
     upload_dir = "uploads/id/property-owners"
