@@ -288,7 +288,7 @@ async def create_property_owner(
     cursor.execute("""
         INSERT INTO users (first_name, last_name, email, password, role, created_at)
         VALUES (%s, %s, %s, %s, 'owner', GETDATE())
-    """, (firstName, lastName, email, temp_password_hashed))
+    """, (firstName, lastName, email))
     db.commit()
 
     cursor.execute("SELECT SCOPE_IDENTITY() AS id")
