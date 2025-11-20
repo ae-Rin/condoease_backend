@@ -252,6 +252,63 @@ async def create_tenant(
         db.rollback()
         print("❌ Insert Error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to create tenant")
+    
+@router.post("/api/property-owners")
+async def create_property_owner(
+    lastName: str = Form(...),
+    firstName: str = Form(...),
+    email: str = Form(...),
+    contactNumber: str = Form(...),
+    street: str = Form(...),
+    barangay: str = Form(...),
+    city: str = Form(...),
+    province: str = Form(...),
+    token: dict = Depends(verify_token)
+):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    # 1️⃣ Check if email already exists in users
+    cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+    user = cursor.fetchone()
+
+    if user:
+        user_id = user["id"]
+    else:
+        # 2️⃣ Create an owner user account
+        temp_password = pwd_context.hash("changeme123")
+
+        cursor.execute("""
+            INSERT INTO users (first_name, last_name, email, password, role, created_at)
+            VALUES (%s, %s, %s, %s, 'owner', GETDATE())
+        """, (firstName, lastName, email, temp_password))
+        db.commit()
+
+        cursor.execute("SELECT SCOPE_IDENTITY() AS id")
+        user_id = cursor.fetchone()["id"]
+
+    # 3️⃣ Insert into property_owners table
+    try:
+        cursor.execute("""
+            INSERT INTO property_owners (
+                user_id, last_name, first_name, email, contact_number,
+                street, barangay, city, province,
+                created_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, GETDATE(), GETDATE())
+        """, (
+            user_id, lastName, firstName, email, contactNumber,
+            street, barangay, city, province
+        ))
+
+        db.commit()
+
+        return {"success": True, "message": "Property owner created successfully", "user_id": user_id}
+
+    except Exception as e:
+        db.rollback()
+        print("❌ Property Owner Insert Error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to create property owner")
 
 UPLOAD_DIR = "uploads/leases"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
