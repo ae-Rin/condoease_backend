@@ -252,7 +252,7 @@ async def create_tenant(
         db.rollback()
         print("❌ Insert Error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to create tenant")
-    
+
 @router.post("/api/property-owners")
 async def create_property_owner(
     lastName: str = Form(...),
@@ -263,47 +263,74 @@ async def create_property_owner(
     barangay: str = Form(...),
     city: str = Form(...),
     province: str = Form(...),
+    idType: str = Form(...),
+    idNumber: str = Form(...),
+    idDocument: UploadFile = File(...),
+    bankAssociated: str = Form(...),
+    bankAccountNumber: str = Form(...),
     token: dict = Depends(verify_token)
 ):
     db = get_db()
     cursor = db.cursor(as_dict=True)
 
-    # 1️⃣ Check if email already exists in users
+    # 1️⃣ CHECK IF EMAIL EXISTS IN USERS TABLE
     cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
     user = cursor.fetchone()
 
     if user:
         user_id = user["id"]
     else:
-        # 2️⃣ Create an owner user account
-        temp_password = pwd_context.hash("changeme123")
+        temp_password_hashed = pwd_context.hash("changeme123")
 
         cursor.execute("""
             INSERT INTO users (first_name, last_name, email, password, role, created_at)
             VALUES (%s, %s, %s, %s, 'owner', GETDATE())
-        """, (firstName, lastName, email, temp_password))
+        """, (firstName, lastName, email, temp_password_hashed))
         db.commit()
 
         cursor.execute("SELECT SCOPE_IDENTITY() AS id")
         user_id = cursor.fetchone()["id"]
 
-    # 3️⃣ Insert into property_owners table
+    # 2️⃣ HANDLE FILE UPLOAD (Owner's ID Document)
+    upload_dir = "uploads/id/property-owners"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    file_extension = idDocument.filename.split(".")[-1]
+    new_filename = f"owner_{user_id}_{uuid.uuid4()}.{file_extension}"
+    file_path = os.path.join(upload_dir, new_filename)
+
+    with open(file_path, "wb") as f:
+        f.write(await idDocument.read())
+
+    saved_file_path = f"/uploads/id/property-owners/{new_filename}"
+
+    # 3️⃣ INSERT INTO property_owners TABLE
     try:
         cursor.execute("""
             INSERT INTO property_owners (
-                user_id, last_name, first_name, email, contact_number,
-                street, barangay, city, province,
+                user_id, last_name, first_name, email,
+                contact_number, street, barangay, city, province,
+                id_type, id_number, id_document,
+                bank_associated, bank_account_number,
                 created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, GETDATE(), GETDATE())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, GETDATE(), GETDATE())
         """, (
-            user_id, lastName, firstName, email, contactNumber,
-            street, barangay, city, province
+            user_id, lastName, firstName, email,
+            contactNumber, street, barangay, city, province,
+            idType, idNumber, saved_file_path,
+            bankAssociated, bankAccountNumber
         ))
 
         db.commit()
 
-        return {"success": True, "message": "Property owner created successfully", "user_id": user_id}
+        return {
+            "success": True,
+            "message": "Property owner created successfully",
+            "user_id": user_id,
+            "file": saved_file_path
+        }
 
     except Exception as e:
         db.rollback()
