@@ -204,7 +204,7 @@ async def create_tenant(
     cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
     existing_user = cursor.fetchone()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Email already exists as a user")
+        raise HTTPException(status_code=400, detail="Email already has an account")
 
     extension = os.path.splitext(idDocument.filename)[-1]
     filename = f"{uuid4()}{extension}"
@@ -214,8 +214,6 @@ async def create_tenant(
         shutil.copyfileobj(idDocument.file, buffer)
 
     try:
-        # ✅ Step 3: Insert new user (role = tenant)
-        # temp_password = pwd_context.hash("changeme123")  # you can replace this with random gen
         cursor.execute("""
             INSERT INTO users (first_name, last_name, email, password, role, created_at)
             VALUES (%s, %s, %s, %s, 'tenant', GETDATE())
@@ -225,7 +223,6 @@ async def create_tenant(
         cursor.execute("SELECT SCOPE_IDENTITY() AS id")
         new_user_id = cursor.fetchone()["id"]
 
-        # ✅ Step 4: Insert tenant profile linked to new user
         cursor.execute("""
             INSERT INTO tenants (
                 user_id, last_name, first_name, email, contact_number,
@@ -243,13 +240,12 @@ async def create_tenant(
             emergencyContactName, emergencyContactNumber
         ))
         db.commit()
-
         return {"message": "Tenant created successfully", "user_id": new_user_id}
 
     except Exception as e:
         db.rollback()
-        print("❌ Insert Error:", str(e))
-        raise HTTPException(status_code=500, detail="Failed to create tenant")
+        print("TenantInsert Error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to create tenant. Please try again.")
 
 @router.post("/api/property-owners")
 async def create_property_owner(
@@ -274,16 +270,7 @@ async def create_property_owner(
     cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
     existing_user = cursor.fetchone()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Email already exists as a user")
-
-    # 1️⃣ CHECK IF EMAIL EXISTS IN USERS TABLE
-    # cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
-    # user = cursor.fetchone()
-
-    # if user:
-    #     user_id = user["id"]
-    # else:
-    #     temp_password_hashed = pwd_context.hash("changeme123")
+        raise HTTPException(status_code=400, detail="Email already has an account")
 
     cursor.execute("""
         INSERT INTO users (first_name, last_name, email, password, role, created_at)
@@ -294,7 +281,6 @@ async def create_property_owner(
     cursor.execute("SELECT SCOPE_IDENTITY() AS id")
     user_id = cursor.fetchone()["id"]
 
-    # 2️⃣ HANDLE FILE UPLOAD (Owner's ID Document)
     upload_dir = "uploads/id/property-owners"
     os.makedirs(upload_dir, exist_ok=True)
 
@@ -307,7 +293,6 @@ async def create_property_owner(
 
     saved_file_path = f"/uploads/id/property-owners/{new_filename}"
 
-    # 3️⃣ INSERT INTO property_owners TABLE
     try:
         cursor.execute("""
             INSERT INTO property_owners (
@@ -325,9 +310,7 @@ async def create_property_owner(
             idType, idNumber, saved_file_path,
             bankAssociated, bankAccountNumber
         ))
-
         db.commit()
-
         return {
             "success": True,
             "message": "Property owner created successfully",
@@ -337,8 +320,8 @@ async def create_property_owner(
 
     except Exception as e:
         db.rollback()
-        print("❌ Property Owner Insert Error:", str(e))
-        raise HTTPException(status_code=500, detail="Failed to create property owner")
+        print(" Property Owner Insert Error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to create property owner. Please try again.")
 
 UPLOAD_DIR = "uploads/leases"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
