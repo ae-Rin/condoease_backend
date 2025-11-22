@@ -213,8 +213,8 @@ async def create_tenant(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(idDocument.file, buffer)
 
-    temp_password = pwd_context.hash("changeme123")
     try:
+        temp_password = pwd_context.hash("changeme123")
         cursor.execute("""
             INSERT INTO users (first_name, last_name, email, password, role, created_at)
             VALUES (%s, %s, %s, %s, 'tenant', GETDATE())
