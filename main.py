@@ -213,11 +213,12 @@ async def create_tenant(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(idDocument.file, buffer)
 
+    temp_password = pwd_context.hash("changeme123")
     try:
         cursor.execute("""
             INSERT INTO users (first_name, last_name, email, password, role, created_at)
-            VALUES (%s, %s, %s, 'tenant', GETDATE())
-        """, (firstName, lastName, email))
+            VALUES (%s, %s, %s, %s, 'tenant', GETDATE())
+        """, (firstName, lastName, email, temp_password))
         db.commit()
 
         cursor.execute("SELECT SCOPE_IDENTITY() AS id")
@@ -272,10 +273,11 @@ async def create_property_owner(
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already has an account")
 
+    temp_password = pwd_context.hash("changeme123")
     cursor.execute("""
         INSERT INTO users (first_name, last_name, email, password, role, created_at)
         VALUES (%s, %s, %s, %s, 'owner', GETDATE())
-    """, (firstName, lastName, email))
+    """, (firstName, lastName, email, temp_password))
     db.commit()
 
     cursor.execute("SELECT SCOPE_IDENTITY() AS id")
