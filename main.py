@@ -273,10 +273,11 @@ async def create_property_owner(
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already has an account")
 
+    temp_password = pwd_context.hash("changeme123")
     cursor.execute("""
         INSERT INTO users (first_name, last_name, email, password, role, created_at)
         VALUES (%s, %s, %s, %s, 'owner', GETDATE())
-    """, (firstName, lastName, email))
+    """, (firstName, lastName, email, temp_password))
     db.commit()
 
     cursor.execute("SELECT SCOPE_IDENTITY() AS id")
@@ -284,14 +285,12 @@ async def create_property_owner(
 
     upload_dir = "uploads/id/property-owners"
     os.makedirs(upload_dir, exist_ok=True)
-
     file_extension = idDocument.filename.split(".")[-1]
     new_filename = f"owner_{user_id}_{uuid.uuid4()}.{file_extension}"
     file_path = os.path.join(upload_dir, new_filename)
 
     with open(file_path, "wb") as f:
         f.write(await idDocument.read())
-
     saved_file_path = f"/uploads/id/property-owners/{new_filename}"
 
     try:
