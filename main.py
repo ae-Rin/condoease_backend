@@ -364,7 +364,6 @@ async def create_property(
     
     upload_dir = "uploads/properties"
     os.makedirs(upload_dir, exist_ok=True)
-
     saved_images = []
     for img in propertyImages:
         ext = img.filename.split(".")[-1]
