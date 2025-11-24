@@ -328,8 +328,6 @@ async def create_property(
     propertyName: str = Form(...),
     registeredOwner: int = Form(...),
     areaMeasurement: str = Form(...),
-    commissionPercentage: float = Form(...),
-    depositPrice: float = Form(...),
     description: str = Form(...),
     street: str = Form(...),
     barangay: str = Form(...),
@@ -341,8 +339,29 @@ async def create_property(
     propertyImages: List[UploadFile] = File([]),
     token: dict = Depends(verify_token)
 ):
-    db = get_db()
-    cursor = db.cursor(as_dict=True)
+    # missing_fields = []
+    # required_fields = {
+    #     "Property Name": propertyName,
+    #     "Registered Owner": registeredOwner,
+    #     "Area Measurement": areaMeasurement,
+    #     "Description": description,
+        # "Location Search": locationSearch,
+    #     "Street": street,
+    #     "Barangay": barangay,
+    #     "City": city,
+    #     "Province": province,
+    #     "Property Notes": propertyNotes,
+    #     "Units": units,
+    # }
+    # for label, value in required_fields.items():
+    #     if value is None or value == "" or value == 0:
+    #         missing_fields.append(label)
+    # if missing_fields:
+    #     raise HTTPException(
+    #         status_code=400,
+    #         detail=f"Missing required fields: {', '.join(missing_fields)}"
+        # )
+    
     upload_dir = "uploads/properties"
     os.makedirs(upload_dir, exist_ok=True)
 
@@ -354,36 +373,35 @@ async def create_property(
         with open(filepath, "wb") as f:
             f.write(await img.read())
         saved_images.append(f"/uploads/properties/{filename}")
-
+        
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
     try:
         cursor.execute("""
             INSERT INTO properties (
-                property_name, owner_id, area_measurement,
-                commission_percentage, deposit_price, description,
-                street, barangay, city, province,
-                property_notes, total_units, images,
-                created_at, updated_at
+                property_name, registered_owner, area_measurement,
+                description, street, barangay, city,
+                province, property_notes, units, selected_features,
+                created_at
             ) VALUES (
-                %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s,
                 %s, %s, %s,
-                GETDATE(), GETDATE()
+                %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                GETDATE()
             )
         """, (
             propertyName, registeredOwner, areaMeasurement,
-            commissionPercentage, depositPrice, description,
-            street, barangay, city, province,
-            propertyNotes, units, ",".join(saved_images)
+            description, street, barangay, city,
+            province, propertyNotes, units, selectedFeatures
         ))
         db.commit()
-
         cursor.execute("SELECT SCOPE_IDENTITY() AS id")
         property_id = cursor.fetchone()["id"]
 
     except Exception as e:
         db.rollback()
         print("Property Insert Error →", e)
-        raise HTTPException(status_code=500, detail="Failed to create property")
+        raise HTTPException(status_code=500, detail="Failed to save property details")
 
     try:
         for i in range(1, units + 1):
@@ -398,23 +416,24 @@ async def create_property(
         print("Unit Insert Error →", e)
 
     try:
-        feats = selectedFeatures.split(",") if selectedFeatures else []
-        for feature in feats:
+        for i in range(1, units + 1):
             cursor.execute("""
-                INSERT INTO property_features (property_id, feature_name)
-                VALUES (%s, %s)
-            """, (property_id, feature.strip()))
+                INSERT INTO property_units (
+                    property_id, unit_number, status, created_at
+                )
+                VALUES (%s, %s, 'vacant', GETDATE())
+            """, (property_id, f"Unit {i}"))
 
         db.commit()
     except Exception as e:
         db.rollback()
-        print("Feature Insert Error →", e)
+        print("Unit Insert Error →", e)
 
     return {
         "success": True,
-        "message": "Property added successfully",
+        "message": "Property created successfully",
         "property_id": property_id,
-        "images": saved_images
+        "uploaded_images": saved_images,
     }
 
 UPLOAD_DIR = "uploads/leases"
