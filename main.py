@@ -322,6 +322,100 @@ async def create_property_owner(
         db.rollback()
         print(" Property Owner Insert Error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to create property owner. Please try again.")
+    
+@router.post("/api/properties")
+async def create_property(
+    propertyName: str = Form(...),
+    registeredOwner: int = Form(...),
+    areaMeasurement: str = Form(...),
+    commissionPercentage: float = Form(...),
+    depositPrice: float = Form(...),
+    description: str = Form(...),
+    street: str = Form(...),
+    barangay: str = Form(...),
+    city: str = Form(...),
+    province: str = Form(...),
+    propertyNotes: str = Form(""),
+    units: int = Form(...),
+    selectedFeatures: str = Form(""),
+    propertyImages: List[UploadFile] = File([]),
+    token: dict = Depends(verify_token)
+):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+    upload_dir = "uploads/properties"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    saved_images = []
+    for img in propertyImages:
+        ext = img.filename.split(".")[-1]
+        filename = f"prop_{uuid.uuid4()}.{ext}"
+        filepath = os.path.join(upload_dir, filename)
+        with open(filepath, "wb") as f:
+            f.write(await img.read())
+        saved_images.append(f"/uploads/properties/{filename}")
+
+    try:
+        cursor.execute("""
+            INSERT INTO properties (
+                property_name, owner_id, area_measurement,
+                commission_percentage, deposit_price, description,
+                street, barangay, city, province,
+                property_notes, total_units, images,
+                created_at, updated_at
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s,
+                GETDATE(), GETDATE()
+            )
+        """, (
+            propertyName, registeredOwner, areaMeasurement,
+            commissionPercentage, depositPrice, description,
+            street, barangay, city, province,
+            propertyNotes, units, ",".join(saved_images)
+        ))
+        db.commit()
+
+        cursor.execute("SELECT SCOPE_IDENTITY() AS id")
+        property_id = cursor.fetchone()["id"]
+
+    except Exception as e:
+        db.rollback()
+        print("Property Insert Error →", e)
+        raise HTTPException(status_code=500, detail="Failed to create property")
+
+    try:
+        for i in range(1, units + 1):
+            cursor.execute("""
+                INSERT INTO property_units (property_id, unit_number, status, created_at, updated_at)
+                VALUES (%s, %s, 'vacant', GETDATE(), GETDATE())
+            """, (property_id, f"Unit {i}"))
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print("Unit Insert Error →", e)
+
+    try:
+        feats = selectedFeatures.split(",") if selectedFeatures else []
+        for feature in feats:
+            cursor.execute("""
+                INSERT INTO property_features (property_id, feature_name)
+                VALUES (%s, %s)
+            """, (property_id, feature.strip()))
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print("Feature Insert Error →", e)
+
+    return {
+        "success": True,
+        "message": "Property added successfully",
+        "property_id": property_id,
+        "images": saved_images
+    }
 
 UPLOAD_DIR = "uploads/leases"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
