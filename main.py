@@ -339,29 +339,6 @@ async def create_property(
     propertyImages: List[UploadFile] = File([]),
     token: dict = Depends(verify_token)
 ):
-    # missing_fields = []
-    # required_fields = {
-    #     "Property Name": propertyName,
-    #     "Registered Owner": registeredOwner,
-    #     "Area Measurement": areaMeasurement,
-    #     "Description": description,
-        # "Location Search": locationSearch,
-    #     "Street": street,
-    #     "Barangay": barangay,
-    #     "City": city,
-    #     "Province": province,
-    #     "Property Notes": propertyNotes,
-    #     "Units": units,
-    # }
-    # for label, value in required_fields.items():
-    #     if value is None or value == "" or value == 0:
-    #         missing_fields.append(label)
-    # if missing_fields:
-    #     raise HTTPException(
-    #         status_code=400,
-    #         detail=f"Missing required fields: {', '.join(missing_fields)}"
-        # )
-    
     upload_dir = "uploads/properties"
     os.makedirs(upload_dir, exist_ok=True)
     saved_images = []
