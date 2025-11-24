@@ -326,7 +326,7 @@ async def create_property_owner(
 @router.post("/api/properties")
 async def create_property(
     propertyName: str = Form(...),
-    registeredOwner: int = Form(...),
+    registeredOwner: str = Form(...),
     areaMeasurement: str = Form(...),
     description: str = Form(...),
     street: str = Form(...),
