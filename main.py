@@ -391,20 +391,6 @@ async def create_property(
         db.rollback()
         print("Unit Insert Error →", e)
 
-    try:
-        for i in range(1, units + 1):
-            cursor.execute("""
-                INSERT INTO property_units (
-                    property_id, unit_number, status, created_at
-                )
-                VALUES (%s, %s, 'vacant', GETDATE())
-            """, (property_id, f"Unit {i}"))
-
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print("Unit Insert Error →", e)
-
     return {
         "success": True,
         "message": "Property created successfully",
@@ -521,7 +507,15 @@ def get_all_property_owners(token: dict = Depends(verify_token)):
 def get_all_properties(token: dict = Depends(verify_token)):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-    cursor.execute("SELECT * FROM properties")
+    # cursor.execute("SELECT * FROM properties")
+    cursor.execute("""
+        SELECT 
+            p.*,
+            u.first_name + ' ' + u.last_name AS owner_full_name
+        FROM properties p
+        LEFT JOIN users u ON p.registered_owner = u.id
+        ORDER BY p.created_at DESC
+    """)
     return cursor.fetchall()
 
 @app.get("/api/property-units")
