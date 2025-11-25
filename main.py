@@ -507,15 +507,7 @@ def get_all_property_owners(token: dict = Depends(verify_token)):
 def get_all_properties(token: dict = Depends(verify_token)):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-    # cursor.execute("SELECT * FROM properties")
-    cursor.execute("""
-        SELECT 
-            p.*,
-            po.first_name + ' ' + po.last_name AS owner_full_name
-        FROM properties p
-        LEFT JOIN property_owners po ON p.registered_owner = po.owner_id
-        ORDER BY p.created_at DESC
-    """)
+    cursor.execute("SELECT * FROM properties")
     return cursor.fetchall()
 
 @app.get("/api/property-units")
