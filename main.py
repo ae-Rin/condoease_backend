@@ -511,9 +511,9 @@ def get_all_properties(token: dict = Depends(verify_token)):
     cursor.execute("""
         SELECT 
             p.*,
-            u.first_name + ' ' + u.last_name AS owner_full_name
+            po.first_name + ' ' + po.last_name AS owner_full_name
         FROM properties p
-        LEFT JOIN users u ON p.registered_owner = u.id
+        LEFT JOIN property_owners po ON p.registered_owner = po.owner_id
         ORDER BY p.created_at DESC
     """)
     return cursor.fetchall()
