@@ -221,7 +221,7 @@ async def create_tenant(
         """, (firstName, lastName, email, temp_password))
         db.commit()
 
-        cursor.execute("SELECT SCOPE_IDENTITY() AS id")
+        cursor.execute("SELECT @@IDENTITY AS id")
         new_user_id = cursor.fetchone()["id"]
 
         cursor.execute("""
@@ -280,7 +280,7 @@ async def create_property_owner(
     """, (firstName, lastName, email, temp_password))
     db.commit()
 
-    cursor.execute("SELECT SCOPE_IDENTITY() AS id")
+    cursor.execute("SELECT @@IDENTITY AS id")
     user_id = cursor.fetchone()["id"]
 
     upload_dir = "uploads/id/property-owners"
@@ -352,6 +352,29 @@ async def create_property(
         
     db = get_db()
     cursor = db.cursor(as_dict=True)
+    cursor.execute("""
+        SELECT id FROM properties
+        WHERE property_name = %s
+        AND registered_owner = %s
+        AND street = %s
+        AND barangay = %s
+        AND city = %s
+        AND province = %s
+    """, (
+        propertyName,
+        registeredOwner,
+        street,
+        barangay,
+        city,
+        province
+    ))
+    existing = cursor.fetchone()
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Property already exists for this owner and address."
+        )
+    
     try:
         cursor.execute("""
             INSERT INTO properties (
@@ -371,7 +394,7 @@ async def create_property(
             province, propertyNotes, units, selectedFeatures
         ))
         db.commit()
-        cursor.execute("SELECT SCOPE_IDENTITY() AS id")
+        cursor.execute("SELECT @@IDENTITY AS id")
         property_id = cursor.fetchone()["id"]
 
     except Exception as e:
@@ -400,7 +423,7 @@ async def create_property(
     
 @router.post("/api/property-units")
 async def create_property_unit(
-    propertyId: int = Form(...),
+    propertyId: str = Form(...),
     unitType: str = Form(...),
     unitNumber: str = Form(...),
     commissionPercentage: float = Form(...),
@@ -414,6 +437,17 @@ async def create_property_unit(
 ):
     db = get_db()
     cursor = db.cursor(as_dict=True)
+    cursor.execute("""
+        SELECT id FROM property_units
+        WHERE property_id = %s AND unit_number = %s
+    """, (propertyId, unitNumber))
+    existing_unit = cursor.fetchone()
+    if existing_unit:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unit '{unitNumber}' already exists for this property."
+        )
+    
     upload_dir = "uploads/unit-images"
     os.makedirs(upload_dir, exist_ok=True)
     saved_images = []
@@ -564,7 +598,6 @@ def get_all_property_owners(token: dict = Depends(verify_token)):
 def get_all_properties(token: dict = Depends(verify_token)):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-    # cursor.execute("SELECT * FROM properties")
     cursor.execute("""
     SELECT 
         p.*,
