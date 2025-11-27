@@ -397,6 +397,63 @@ async def create_property(
         "property_id": property_id,
         "uploaded_images": saved_images,
     }
+    
+@router.post("/api/property-units")
+async def create_property_unit(
+    propertyId: int = Form(...),
+    unitType: str = Form(...),
+    unitNumber: str = Form(...),
+    commissionPercentage: float = Form(...),
+    rentPrice: float = Form(...),
+    depositPrice: float = Form(...),
+    floor: str = Form(...),
+    size: float = Form(...),
+    description: str = Form(...),
+    unitImages: List[UploadFile] = File(...),
+    token: dict = Depends(verify_token)
+):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+    upload_dir = "uploads/unit-images"
+    os.makedirs(upload_dir, exist_ok=True)
+    saved_images = []
+    
+    try:
+        cursor.execute("""
+            INSERT INTO property_units
+            (property_id, unit_type, unit_number, commission_percentage,
+            rent_price, deposit_price, floor, size, description, status, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'vacant', GETDATE())
+        """, (
+            propertyId, unitType, unitNumber, commissionPercentage,
+            rentPrice, depositPrice, floor, size, description
+        ))
+        db.commit()
+
+        cursor.execute("SELECT SCOPE_IDENTITY() AS id")
+        new_unit_id = cursor.fetchone()["id"]
+        for file in unitImages:
+            ext = os.path.splitext(file.filename)[-1]
+            new_name = f"{uuid4()}{ext}"
+            file_path = os.path.join(upload_dir, new_name)
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            cursor.execute("""
+                INSERT INTO unit_images (unit_id, image_path)
+                VALUES (%s, %s)
+            """, (new_unit_id, new_name))
+            saved_images.append(new_name)
+        db.commit()
+        return {
+            "message": "Property unit created successfully",
+            "unit_id": new_unit_id,
+            "images": saved_images
+        }
+
+    except Exception as e:
+        db.rollback()
+        print("CreateUnit Error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to create property unit.")
 
 UPLOAD_DIR = "uploads/leases"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
