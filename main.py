@@ -487,7 +487,7 @@ async def create_property_unit(
     except Exception as e:
         db.rollback()
         print("CreateUnit Error:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
         # raise HTTPException(status_code=500, detail="Failed to create property unit.")
 
 UPLOAD_DIR = "uploads/leases"
