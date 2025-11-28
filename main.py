@@ -423,7 +423,7 @@ async def create_property(
     
 @router.post("/api/property-units")
 async def create_property_unit(
-    propertyId: str = Form(...),
+    propertyId: int = Form(...),
     unitType: str = Form(...),
     unitNumber: str = Form(...),
     commissionPercentage: float = Form(...),
@@ -464,7 +464,7 @@ async def create_property_unit(
         ))
         db.commit()
 
-        cursor.execute("SELECT @@IDENTITY AS id")
+        cursor.execute("SELECT SCOPE_IDENTITY() AS id")
         new_unit_id = cursor.fetchone()["id"]
         for file in unitImages:
             ext = os.path.splitext(file.filename)[-1]
