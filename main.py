@@ -576,6 +576,8 @@ async def create_lease(
     except Exception as e:
         db.rollback()
         return {"error": str(e)}
+    
+    
 
 @app.get("/api/tenants")
 def get_all_tenants(token: dict = Depends(verify_token)):
