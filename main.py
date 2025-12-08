@@ -1,9 +1,9 @@
 import shutil
 import time
-import os
+import os       
 from typing import List, Optional
 import uuid
-from fastapi import FastAPI, APIRouter, Form, Request, Depends, HTTPException, status, File, UploadFile
+from fastapi import FastAPI, APIRouter, Form, Request, Depends, HTTPException, status, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -73,6 +73,32 @@ class MaintenanceRequest(BaseModel):
     category: str
     description: str
     attachment: Optional[str] = None
+    
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            await connection.send_json(message)
+
+ws_manager = ConnectionManager()
+
+@app.websocket("/ws/announcements")
+async def announcement_ws(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
 
 # Token Auth Dependency
 def verify_token(request: Request):
@@ -173,6 +199,63 @@ def update_user_profile(user_id: int, firstName: Optional[str] = Form(None), las
     cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = %s", tuple(params))
     db.commit()
     return {"success": True}
+
+@app.post("/api/announcements")
+async def create_announcement(
+    title: str = Form(...),
+    description: str = Form(...),
+    file: UploadFile = File(None),
+    token: dict = Depends(verify_token)
+):
+    user_id = token.get("id")
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    # Handle file upload
+    file_url = None
+    if file:
+        ext = file.filename.split(".")[-1]
+        filename = f"{uuid.uuid4()}.{ext}"
+        upload_path = os.path.join("uploads", "announcements")
+        os.makedirs(upload_path, exist_ok=True)
+
+        file_path = os.path.join(upload_path, filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        file_url = f"/uploads/announcements/{filename}"
+
+    # Insert announcement
+    cursor.execute("""
+        INSERT INTO post_announcements (title, description, file_url, user_id, created_at)
+        VALUES (%s, %s, %s, %s, GETDATE())
+    """, (title, description, file_url, user_id))
+    db.commit()
+
+    cursor.execute("SELECT @@IDENTITY AS id")
+    ann_id = cursor.fetchone()["id"]
+
+    # Fetch new announcement
+    cursor.execute("SELECT * FROM post_announcements WHERE id = %s", (ann_id,))
+    new_post = cursor.fetchone()
+
+    # Broadcast real-time update
+    await ws_manager.broadcast({"event": "new_announcement", "data": new_post})
+
+    return new_post
+
+@app.get("/api/announcements")
+def get_announcements(token: dict = Depends(verify_token)):
+    user_id = token.get("id")
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    cursor.execute("""
+        SELECT * FROM post_announcements
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+    """, (user_id,))
+    return cursor.fetchall()
 
 router = APIRouter()
 
