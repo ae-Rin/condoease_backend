@@ -324,7 +324,7 @@ async def create_tenant(
             emergencyContactName, emergencyContactNumber
         ))
         db.commit()
-        return {"message": "Tenant created successfully YAAAAAYYYYY", "user_id": new_user_id}
+        return {"message": "Tenant created successfully", "user_id": new_user_id}
 
     except Exception as e:
         db.rollback()
