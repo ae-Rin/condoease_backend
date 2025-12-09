@@ -330,6 +330,100 @@ async def create_tenant(
         db.rollback()
         print("TenantInsert Error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to create tenant. Please try again.")
+    
+@router.put("/api/tenants/{tenant_id}")
+async def update_tenant(
+    tenant_id: int,
+    lastName: str = Form(...),
+    firstName: str = Form(...),
+    email: str = Form(...),
+    contactNumber: str = Form(...),
+    street: str = Form(...),
+    barangay: str = Form(...),
+    city: str = Form(...),
+    province: str = Form(...),
+    idType: str = Form(...),
+    idNumber: str = Form(...),
+    occupationStatus: str = Form(...),
+    occupationPlace: str = Form(...),
+    emergencyContactName: str = Form(...),
+    emergencyContactNumber: str = Form(...),
+    idDocument: UploadFile = File(None),
+    token: dict = Depends(verify_token),
+):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    cursor.execute("SELECT * FROM tenants WHERE id = %s", (tenant_id,))
+    tenant = cursor.fetchone()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+
+    new_doc = tenant["id_document"]
+
+    if idDocument:
+        ext = os.path.splitext(idDocument.filename)[-1]
+        filename = f"{uuid4()}{ext}"
+        upload_path = f"uploads/id/tenants/{filename}"
+
+        with open(upload_path, "wb") as f:
+            shutil.copyfileobj(idDocument.file, f)
+
+        old_path = f"uploads/id/tenants/{tenant['id_document']}"
+        if os.path.exists(old_path):
+            os.remove(old_path)
+
+        new_doc = filename
+
+    try:
+        cursor.execute("""
+            UPDATE tenants SET
+                last_name=%s, first_name=%s, email=%s, contact_number=%s,
+                street=%s, barangay=%s, city=%s, province=%s,
+                id_type=%s, id_number=%s, id_document=%s,
+                occupation_status=%s, occupation_place=%s,
+                emergency_contact_name=%s, emergency_contact_number=%s,
+                updated_at=GETDATE()
+            WHERE id=%s
+        """, (
+            lastName, firstName, email, contactNumber,
+            street, barangay, city, province,
+            idType, idNumber, new_doc,
+            occupationStatus, occupationPlace,
+            emergencyContactName, emergencyContactNumber,
+            tenant_id
+        ))
+        db.commit()
+        return {"message": "Tenant updated successfully"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Update failed: {e}")
+    
+@router.delete("/api/tenants/{tenant_id}")
+async def delete_tenant(tenant_id: int, token: dict = Depends(verify_token)):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    cursor.execute("SELECT * FROM tenants WHERE id=%s", (tenant_id,))
+    tenant = cursor.fetchone()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+
+    try:
+        file_path = f"uploads/id/tenants/{tenant['id_document']}"
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        cursor.execute("DELETE FROM tenants WHERE id=%s", (tenant_id,))
+        cursor.execute("DELETE FROM users WHERE id=%s", (tenant["user_id"]))
+        db.commit()
+
+        return {"message": "Tenant deleted successfully"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Delete failed: {e}")
 
 @router.post("/api/property-owners")
 async def create_property_owner(
@@ -405,6 +499,96 @@ async def create_property_owner(
         db.rollback()
         print(" Property Owner Insert Error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to create property owner. Please try again.")
+    
+@router.put("/api/property-owners/{owner_id}")
+async def update_property_owner(
+    owner_id: int,
+    lastName: str = Form(...),
+    firstName: str = Form(...),
+    email: str = Form(...),
+    contactNumber: str = Form(...),
+    street: str = Form(...),
+    barangay: str = Form(...),
+    city: str = Form(...),
+    province: str = Form(...),
+    idType: str = Form(...),
+    idNumber: str = Form(...),
+    bankAssociated: str = Form(...),
+    bankAccountNumber: str = Form(...),
+    idDocument: UploadFile = File(None),
+    token: dict = Depends(verify_token)
+):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    cursor.execute("SELECT * FROM property_owners WHERE owner_id=%s", (owner_id,))
+    owner = cursor.fetchone()
+    if not owner:
+        raise HTTPException(404, "Owner not found")
+
+    new_doc = owner["id_document"]
+
+    if idDocument:
+        ext = os.path.splitext(idDocument.filename)[-1]
+        filename = f"owner_{owner_id}_{uuid4()}{ext}"
+        upload_path = f"uploads/id/property-owners/{filename}"
+
+        with open(upload_path, "wb") as f:
+            f.write(await idDocument.read())
+
+        old_path = owner["id_document"].lstrip("/")
+        if os.path.exists(old_path):
+            os.remove(old_path)
+
+        new_doc = f"/uploads/id/property-owners/{filename}"
+
+    try:
+        cursor.execute("""
+            UPDATE property_owners SET
+                last_name=%s, first_name=%s, email=%s, contact_number=%s,
+                street=%s, barangay=%s, city=%s, province=%s,
+                id_type=%s, id_number=%s, id_document=%s,
+                bank_associated=%s, bank_account_number=%s,
+                updated_at=GETDATE()
+            WHERE owner_id=%s
+        """, (
+            lastName, firstName, email, contactNumber,
+            street, barangay, city, province,
+            idType, idNumber, new_doc,
+            bankAssociated, bankAccountNumber,
+            owner_id
+        ))
+        db.commit()
+        return {"message": "Property owner updated successfully"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Update failed: {e}")
+    
+@router.delete("/api/property-owners/{owner_id}")
+async def delete_property_owner(owner_id: int, token: dict = Depends(verify_token)):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    cursor.execute("SELECT * FROM property_owners WHERE owner_id=%s", (owner_id,))
+    owner = cursor.fetchone()
+    if not owner:
+        raise HTTPException(404, "Owner not found")
+
+    try:
+        old_doc = owner["id_document"].lstrip("/")
+        if os.path.exists(old_doc):
+            os.remove(old_doc)
+
+        cursor.execute("DELETE FROM property_owners WHERE owner_id=%s", (owner_id,))
+        cursor.execute("DELETE FROM users WHERE id=%s", (owner["user_id"]))
+        db.commit()
+
+        return {"message": "Property owner deleted successfully"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Delete failed: {e}")
     
 @router.post("/api/properties")
 async def create_property(
@@ -504,6 +688,87 @@ async def create_property(
         "uploaded_images": saved_images,
     }
     
+@router.put("/api/properties/{property_id}")
+async def update_property(
+    property_id: int,
+    propertyName: str = Form(...),
+    registeredOwner: str = Form(...),
+    areaMeasurement: str = Form(...),
+    description: str = Form(...),
+    street: str = Form(...),
+    barangay: str = Form(...),
+    city: str = Form(...),
+    province: str = Form(...),
+    propertyNotes: str = Form(""),
+    units: int = Form(...),
+    selectedFeatures: str = Form(""),
+    token: dict = Depends(verify_token),
+):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    cursor.execute("SELECT * FROM properties WHERE id=%s", (property_id,))
+    prop = cursor.fetchone()
+    if not prop:
+        raise HTTPException(404, "Property not found")
+
+    cursor.execute("""
+        SELECT id FROM properties
+        WHERE property_name=%s AND registered_owner=%s AND
+              street=%s AND barangay=%s AND city=%s AND province=%s
+              AND id != %s
+    """, (
+        propertyName, registeredOwner,
+        street, barangay, city, province,
+        property_id
+    ))
+    dup = cursor.fetchone()
+    if dup:
+        raise HTTPException(400, "Another property already exists with this address")
+
+    try:
+        cursor.execute("""
+            UPDATE properties SET
+                property_name=%s, registered_owner=%s, area_measurement=%s,
+                description=%s, street=%s, barangay=%s, city=%s, province=%s,
+                property_notes=%s, units=%s, selected_features=%s,
+                updated_at=GETDATE()
+            WHERE id=%s
+        """, (
+            propertyName, registeredOwner, areaMeasurement,
+            description, street, barangay, city, province,
+            propertyNotes, units, selectedFeatures,
+            property_id
+        ))
+        db.commit()
+
+        return {"message": "Property updated successfully"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Update failed: {e}")
+    
+@router.delete("/api/properties/{property_id}")
+async def delete_property(property_id: int, token: dict = Depends(verify_token)):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    cursor.execute("SELECT * FROM properties WHERE id=%s", (property_id,))
+    prop = cursor.fetchone()
+    if not prop:
+        raise HTTPException(404, "Property not found")
+
+    try:
+        cursor.execute("DELETE FROM property_units WHERE property_id=%s", (property_id,))
+        cursor.execute("DELETE FROM properties WHERE id=%s", (property_id,))
+        db.commit()
+
+        return {"message": "Property deleted successfully"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Delete failed: {e}")
+    
 @router.post("/api/property-units")
 async def create_property_unit(
     propertyId: str = Form(...),
@@ -572,6 +837,112 @@ async def create_property_unit(
         print("CreateUnit Error:", str(e))
         raise HTTPException(status_code=400, detail=str(e))
         # raise HTTPException(status_code=500, detail="Failed to create property unit.")
+        
+@router.put("/api/property-units/{unit_id}")
+async def update_property_unit(
+    unit_id: int,
+    unitType: str = Form(...),
+    unitNumber: str = Form(...),
+    commissionPercentage: float = Form(...),
+    rentPrice: float = Form(...),
+    depositPrice: float = Form(...),
+    floor: str = Form(...),
+    size: float = Form(...),
+    description: str = Form(...),
+    unitImages: List[UploadFile] = File(None),
+    token: dict = Depends(verify_token)
+):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    cursor.execute("SELECT * FROM property_units WHERE id=%s", (unit_id,))
+    unit = cursor.fetchone()
+    if not unit:
+        raise HTTPException(404, "Unit not found")
+
+    cursor.execute("""
+        SELECT id FROM property_units
+        WHERE property_id=%s AND unit_number=%s AND id != %s
+    """, (unit["property_id"], unitNumber, unit_id))
+    dup = cursor.fetchone()
+    if dup:
+        raise HTTPException(400, "Unit number already exists")
+
+    try:
+        cursor.execute("""
+            UPDATE property_units SET
+                unit_type=%s, unit_number=%s, commission_percentage=%s,
+                rent_price=%s, deposit_price=%s, floor=%s,
+                size=%s, description=%s, updated_at=GETDATE()
+            WHERE id=%s
+        """, (
+            unitType, unitNumber, commissionPercentage,
+            rentPrice, depositPrice, floor,
+            size, description, unit_id
+        ))
+        db.commit()
+
+        if unitImages:
+            cursor.execute("SELECT * FROM unit_images WHERE unit_id=%s", (unit_id,))
+            old_imgs = cursor.fetchall()
+            for img in old_imgs:
+                old_path = f"uploads/unit-images/{img['image_path']}"
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+
+            cursor.execute("DELETE FROM unit_images WHERE unit_id=%s", (unit_id,))
+
+            upload_dir = "uploads/unit-images"
+            os.makedirs(upload_dir, exist_ok=True)
+
+            for file in unitImages:
+                ext = os.path.splitext(file.filename)[-1]
+                new_name = f"{uuid4()}{ext}"
+                file_path = os.path.join(upload_dir, new_name)
+                with open(file_path, "wb") as f:
+                    shutil.copyfileobj(file.file, f)
+
+                cursor.execute("""
+                    INSERT INTO unit_images (unit_id, image_path)
+                    VALUES (%s, %s)
+                """, (unit_id, new_name))
+
+            db.commit()
+
+        return {"message": "Unit updated successfully"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Update failed: {e}")
+    
+@router.delete("/api/property-units/{unit_id}")
+async def delete_property_unit(unit_id: int, token: dict = Depends(verify_token)):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    cursor.execute("SELECT * FROM property_units WHERE id=%s", (unit_id,))
+    unit = cursor.fetchone()
+    if not unit:
+        raise HTTPException(404, "Unit not found")
+
+    try:
+        cursor.execute("SELECT * FROM unit_images WHERE unit_id=%s", (unit_id,))
+        imgs = cursor.fetchall()
+
+        for img in imgs:
+            path = f"uploads/unit-images/{img['image_path']}"
+            if os.path.exists(path):
+                os.remove(path)
+
+        cursor.execute("DELETE FROM unit_images WHERE unit_id=%s", (unit_id,))
+        cursor.execute("DELETE FROM property_units WHERE id=%s", (unit_id,))
+        db.commit()
+
+        return {"message": "Unit deleted successfully"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Delete failed: {e}")
 
 UPLOAD_DIR = "uploads/leases"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
