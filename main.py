@@ -1031,8 +1031,6 @@ async def create_lease(
         db.rollback()
         return {"error": str(e)}
     
-    
-
 @app.get("/api/tenants")
 def get_all_tenants(token: dict = Depends(verify_token)):
     try:
@@ -1043,6 +1041,41 @@ def get_all_tenants(token: dict = Depends(verify_token)):
     except Exception as e:
         print("❌ /api/tenants error:", str(e))
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
+    
+@app.get("/api/tenants/{tenant_id}")
+def get_tenant_by_id(tenant_id: int, token: dict = Depends(verify_token)):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+    try:
+        cursor.execute("""
+            SELECT
+                t.id AS tenant_id,
+                t.last_name, 
+                t.first_name, 
+                t.email, 
+                t.contact_number,
+                t.street, 
+                t.barangay, 
+                t.city, 
+                t.province
+                t.id_type, 
+                t.id_number,
+                t.id_document,
+                t.occupation_status,
+                t.occupation_place,
+                t.emergency_contact_name,
+                t.emergency_contact_number,
+                t.created_at,
+                t.updated_at
+            FROM tenants t
+            WHERE t.id = %s
+        """, (tenant_id,))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+    tenant = cursor.fetchone()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return tenant
 
 @app.get("/api/property-owners")
 def get_all_property_owners(token: dict = Depends(verify_token)):
