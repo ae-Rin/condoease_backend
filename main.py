@@ -1057,7 +1057,7 @@ def get_tenant_by_id(tenant_id: int, token: dict = Depends(verify_token)):
                 t.street, 
                 t.barangay, 
                 t.city, 
-                t.province
+                t.province,
                 t.id_type, 
                 t.id_number,
                 t.id_document,
