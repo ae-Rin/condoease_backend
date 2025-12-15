@@ -1049,7 +1049,7 @@ def get_tenant_by_id(tenant_id: int, token: dict = Depends(verify_token)):
     try:
         cursor.execute("""
             SELECT
-                t.id AS tenant_id,
+                t.tenant_id,
                 t.last_name, 
                 t.first_name, 
                 t.email, 
@@ -1068,7 +1068,7 @@ def get_tenant_by_id(tenant_id: int, token: dict = Depends(verify_token)):
                 t.created_at,
                 t.updated_at
             FROM tenants t
-            WHERE t.id = %s
+            WHERE t.tenant_id = %s
         """, (tenant_id,))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
