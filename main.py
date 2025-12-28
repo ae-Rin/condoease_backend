@@ -14,7 +14,7 @@ import pymssql
 from dotenv import load_dotenv
 import uvicorn
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Load .env
 load_dotenv()
@@ -141,7 +141,15 @@ def login_user(body: LoginRequest):
     if not pwd_context.verify(body.password, user['password']):
         raise HTTPException(status_code=401, detail="Incorrect password")
 
-    token = jwt.encode({"id": user['id']}, SECRET_KEY, algorithm=ALGORITHM)
+    token = jwt.encode(
+        {
+            "id": user['id'],
+            "role": user['role'],
+            "exp": datetime.utcnow() + timedelta(hours=12)
+        },
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
     return {"token": token, "user": {
         "id": user['id'],
         "email": user['email'],
