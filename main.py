@@ -74,6 +74,11 @@ class MaintenanceRequest(BaseModel):
     description: str
     attachment: Optional[str] = None
     
+class MaintenanceDecision(BaseModel):
+    status: str
+    comments: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
@@ -207,6 +212,55 @@ def update_user_profile(user_id: int, firstName: Optional[str] = Form(None), las
     cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = %s", tuple(params))
     db.commit()
     return {"success": True}
+
+@app.put("/api/maintenance-requests/{request_id}")
+def update_maintenance_request(
+    request_id: int,
+    body: MaintenanceDecision,
+    token: dict = Depends(verify_token),
+):
+    role = token.get("role")
+
+    if role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    if body.status not in ["ongoing", "pending"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+
+    db = get_db()
+    cursor = db.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT id FROM maintenance_requests WHERE id = %s
+        """, (request_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Maintenance request not found")
+
+        cursor.execute("""
+            UPDATE maintenance_requests
+            SET
+                status = %s,
+                admin_comment = %s,
+                scheduled_at = %s,
+                updated_at = GETDATE()
+            WHERE id = %s
+        """, (
+            body.status,
+            body.comment,
+            body.scheduled_at,
+            request_id
+        ))
+
+        db.commit()
+        return {"success": True, "message": "Maintenance request updated"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print("❌ Update maintenance error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to update maintenance request")
 
 @app.post("/api/announcements")
 async def create_announcement(
@@ -723,8 +777,8 @@ async def update_property(
     cursor.execute("""
         SELECT id FROM properties
         WHERE property_name=%s AND registered_owner=%s AND
-              street=%s AND barangay=%s AND city=%s AND province=%s
-              AND id != %s
+            street=%s AND barangay=%s AND city=%s AND province=%s
+            AND id != %s
     """, (
         propertyName, registeredOwner,
         street, barangay, city, province,
@@ -1162,6 +1216,8 @@ def get_maintenance_requests(token: dict = Depends(verify_token)):
                 mr.category,
                 mr.description,
                 mr.status,
+                mr.scheduled_at,
+                mr.admin_comment,
                 mr.created_at,
                 mr.updated_at
             FROM maintenance_requests mr
@@ -1188,6 +1244,8 @@ def get_maintenance_request_by_id(request_id: int, token: dict = Depends(verify_
                 mr.category,
                 mr.description,
                 mr.status,
+                mr.scheduled_at,
+                mr.admin_comment,
                 mr.created_at,
                 mr.updated_at
             FROM maintenance_requests mr
@@ -1226,6 +1284,7 @@ async def submit_maintenance_request(
     category: str = Form(...),
     description: str = Form(...),
     files: Optional[List[UploadFile]] = File(None),
+    scheduled_at: Optional[str] = Form(None),
     token: dict = Depends(verify_token),
 ):
     tenant_id = token.get("id")
@@ -1233,19 +1292,19 @@ async def submit_maintenance_request(
     cursor = db.cursor()
 
     try:
-        # 1. Insert into maintenance_requests
+        scheduled_dt = None
+        if scheduled_at:
+            scheduled_dt = datetime.fromisoformat(scheduled_at.replace("Z", ""))
         cursor.execute("""
             INSERT INTO maintenance_requests (
-                tenant_id, maintenance_type, category, description, status, created_at, updated_at
-            ) VALUES (%s, %s, %s, %s, %s, GETDATE(), GETDATE())
-        """, (tenant_id, maintenance_type, category, description, "pending"))
+                tenant_id, maintenance_type, category, description, status, scheduled_at, created_at, updated_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, GETDATE(), GETDATE())
+        """, (tenant_id, maintenance_type, category, description, "pending", scheduled_dt))
         db.commit()
 
-        # 2. Get the inserted request ID
         cursor.execute("SELECT SCOPE_IDENTITY()")
         request_id = cursor.fetchone()[0]
 
-        # 3. Handle attachments (if any)
         saved_files = []
         if files:
             for upload in files:
@@ -1254,7 +1313,6 @@ async def submit_maintenance_request(
                 with open(file_path, "wb") as buffer:
                     shutil.copyfileobj(upload.file, buffer)
 
-                # Insert into maintenance_attachments
                 cursor.execute("""
                     INSERT INTO maintenance_attachments (request_id, file_url, file_type, uploaded_at)
                     VALUES (%s, %s, %s, GETDATE())
