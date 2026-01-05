@@ -1216,8 +1216,6 @@ def get_maintenance_requests(token: dict = Depends(verify_token)):
                 mr.category,
                 mr.description,
                 mr.status,
-                mr.scheduled_at,
-                mr.admin_comment,
                 mr.created_at,
                 mr.updated_at
             FROM maintenance_requests mr
