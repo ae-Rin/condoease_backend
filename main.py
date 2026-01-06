@@ -224,8 +224,6 @@ def update_maintenance_request(
     if role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    # if body.status not in ["ongoing", "pending"]:
-    #     raise HTTPException(status_code=400, detail="Invalid status")
     if body.status == "ongoing" and not body.scheduled_at:
         raise HTTPException(
             status_code=400,
@@ -1260,7 +1258,6 @@ def get_maintenance_request_by_id(request_id: int, token: dict = Depends(verify_
         if not result:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
 
-        # Fetch the file attachments for this request
         cursor.execute("""
             SELECT 
                 id AS attachment_id,
