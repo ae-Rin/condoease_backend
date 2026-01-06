@@ -76,7 +76,7 @@ class MaintenanceRequest(BaseModel):
     
 class MaintenanceDecision(BaseModel):
     status: str
-    comments: Optional[str] = None
+    comment: Optional[str] = None
     scheduled_at: Optional[datetime] = None
     
 class ConnectionManager:
@@ -224,8 +224,13 @@ def update_maintenance_request(
     if role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    if body.status not in ["ongoing", "pending"]:
-        raise HTTPException(status_code=400, detail="Invalid status")
+    # if body.status not in ["ongoing", "pending"]:
+    #     raise HTTPException(status_code=400, detail="Invalid status")
+    if body.status == "ongoing" and not body.scheduled_at:
+        raise HTTPException(
+            status_code=400,
+            detail="Scheduled date is required when approving a request"
+        )
 
     db = get_db()
     cursor = db.cursor()
