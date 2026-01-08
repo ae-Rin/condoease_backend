@@ -264,6 +264,85 @@ def update_maintenance_request(
         db.rollback()
         print("❌ Update maintenance error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to update maintenance request")
+    
+@app.put("/api/maintenance-requests/{request_id}/complete")
+def complete_maintenance_request(
+    request_id: int,
+    resolution_summary: str = Form(...),
+    total_cost: Optional[float] = Form(None),
+    warranty_info: Optional[str] = Form(None),
+    invoice: Optional[UploadFile] = File(None),
+    token: dict = Depends(verify_token),
+):
+    role = token.get("role")
+    if role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    db = get_db()
+    cursor = db.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT status FROM maintenance_requests WHERE id = %s
+        """, (request_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Maintenance request not found")
+
+        if row[0] != "ongoing":
+            raise HTTPException(
+                status_code=400,
+                detail="Only ongoing requests can be completed"
+            )
+
+        cursor.execute("""
+            UPDATE maintenance_requests
+            SET
+                status = 'completed',
+                resolution_summary = %s,
+                completed_at = GETDATE(),
+                total_cost = %s,
+                warranty_info = %s,
+                updated_at = GETDATE()
+            WHERE id = %s
+        """, (
+            resolution_summary,
+            total_cost,
+            warranty_info,
+            request_id
+        ))
+
+        if invoice:
+            ext = os.path.splitext(invoice.filename)[-1]
+            filename = f"invoice_{uuid.uuid4()}{ext}"
+            file_path = os.path.join(UPLOAD_DIR, filename)
+
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(invoice.file, buffer)
+
+            cursor.execute("""
+                INSERT INTO maintenance_attachments
+                (request_id, file_url, file_type, uploaded_at)
+                VALUES (%s, %s, %s, GETDATE())
+            """, (
+                request_id,
+                f"/uploads/{filename}",
+                invoice.content_type
+            ))
+
+        db.commit()
+        return {
+            "success": True,
+            "message": "Maintenance request marked as completed"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print("❌ Completion error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to complete maintenance request")
 
 @app.post("/api/announcements")
 async def create_announcement(
