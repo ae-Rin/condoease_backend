@@ -15,6 +15,8 @@ from dotenv import load_dotenv
 import uvicorn
 from uuid import uuid4
 from datetime import datetime, timedelta
+from decimal import Decimal
+import json
 
 # Load .env
 load_dotenv()
@@ -39,6 +41,16 @@ def get_db():
         print("Database connection failed:", e)
         raise
 
+def clean_row(row):
+    safe = {}
+    for k, v in row.items():
+        if isinstance(v, datetime):
+            safe[k] = v.isoformat()
+        elif isinstance(v, Decimal):
+            safe[k] = float(v)
+        else:
+            safe[k] = v
+    return safe
 # App instance
 app = FastAPI()
 
@@ -90,9 +102,26 @@ class ConnectionManager:
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
 
+    def _clean(self, data):
+        if isinstance(data, dict):
+            return {k: self._clean(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self._clean(v) for v in data]
+        elif isinstance(data, datetime):
+            return data.isoformat()
+        elif isinstance(data, Decimal):
+            return float(data)
+        else:
+            return data
+
     async def broadcast(self, message: dict):
+        safe_message = self._clean(message)
+
         for connection in self.active_connections:
-            await connection.send_json(message)
+            try:
+                await connection.send_json(safe_message)
+            except Exception:
+                self.disconnect(connection)
 
 ws_manager = ConnectionManager()
 
@@ -418,9 +447,13 @@ async def create_announcement(
     ann_id = cursor.fetchone()["id"]
 
     cursor.execute("SELECT * FROM post_announcements WHERE id = %s", (ann_id,))
-    new_post = cursor.fetchone()
+    row = cursor.fetchone()
+    new_post = clean_row(row)
 
-    await ws_manager.broadcast({"event": "new_announcement", "data": new_post})
+    await ws_manager.broadcast({
+        "event": "new_announcement",
+        "data": new_post
+    })
 
     return new_post
 
