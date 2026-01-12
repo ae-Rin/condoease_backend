@@ -395,7 +395,6 @@ async def create_announcement(
     db = get_db()
     cursor = db.cursor(as_dict=True)
 
-    # Handle file upload
     file_url = None
     if file:
         ext = file.filename.split(".")[-1]
@@ -409,7 +408,6 @@ async def create_announcement(
         
         file_url = f"/uploads/announcements/{filename}"
 
-    # Insert announcement
     cursor.execute("""
         INSERT INTO post_announcements (title, description, file_url, user_id, created_at)
         VALUES (%s, %s, %s, %s, GETDATE())
@@ -419,11 +417,9 @@ async def create_announcement(
     cursor.execute("SELECT @@IDENTITY AS id")
     ann_id = cursor.fetchone()["id"]
 
-    # Fetch new announcement
     cursor.execute("SELECT * FROM post_announcements WHERE id = %s", (ann_id,))
     new_post = cursor.fetchone()
 
-    # Broadcast real-time update
     await ws_manager.broadcast({"event": "new_announcement", "data": new_post})
 
     return new_post
