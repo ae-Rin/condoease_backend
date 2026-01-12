@@ -220,19 +220,17 @@ def update_maintenance_request(
     token: dict = Depends(verify_token),
 ):
     role = token.get("role")
-
     if role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    if body.status == "ongoing" and not body.scheduled_at:
-        raise HTTPException(
-            status_code=400,
-            detail="Scheduled date is required when approving a request"
-        )
+    # if body.status == "ongoing" and not body.scheduled_at:
+    #     raise HTTPException(
+    #         status_code=400,
+    #         detail="Scheduled date is required when approving a request"
+    #     )
 
     db = get_db()
     cursor = db.cursor()
-
     try:
         cursor.execute("""
             SELECT id FROM maintenance_requests WHERE id = %s
