@@ -399,7 +399,7 @@ async def create_announcement(
     if file:
         ext = file.filename.split(".")[-1]
         filename = f"{uuid.uuid4()}.{ext}"
-        upload_path = os.path.join("uploads", "announcements")
+        upload_path = os.path.join(UPLOAD_DIR, "announcements")
         os.makedirs(upload_path, exist_ok=True)
 
         file_path = os.path.join(upload_path, filename)
