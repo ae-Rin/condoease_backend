@@ -263,7 +263,7 @@ def update_maintenance_request(
         print("❌ Update maintenance error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to update maintenance request")
     
-@app.put("/api/maintenance-requests/{request_id}/complete")
+@app.put("/api/maintenance-ongoing/{request_id}/complete")
 def complete_maintenance_request(
     request_id: int,
     resolution_summary: str = Form(...),
