@@ -223,12 +223,6 @@ def update_maintenance_request(
     if role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    # if body.status == "ongoing" and not body.scheduled_at:
-    #     raise HTTPException(
-    #         status_code=400,
-    #         detail="Scheduled date is required when approving a request"
-    #     )
-
     db = get_db()
     cursor = db.cursor()
     try:
@@ -1355,7 +1349,7 @@ def get_maintenance_request_by_id(request_id: int, token: dict = Depends(verify_
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance request")
     
 @app.get("/api/maintenance-ongoing/{request_id}")
-def get_maintenance_request_by_id(request_id: int, token: dict = Depends(verify_token)):
+def get_ongoing_maintenance_request_by_id(request_id: int, token: dict = Depends(verify_token)):
     db = get_db()
     cursor = db.cursor(as_dict=True)
     try:
