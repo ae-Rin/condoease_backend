@@ -449,6 +449,57 @@ async def create_announcement(
 
     return new_post
 
+@app.put("/api/announcements/{announcement_id}")
+async def update_announcement(
+    announcement_id: int,
+    title: str = Form(...),
+    description: str = Form(...),
+    file: UploadFile = File(None),
+    token: dict = Depends(verify_token),
+):
+    user_id = token.get("id")
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+
+    cursor.execute(
+        "SELECT * FROM post_announcements WHERE id=%s AND user_id=%s",
+        (announcement_id, user_id),
+    )
+    existing = cursor.fetchone()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+
+    file_url = existing["file_url"]
+
+    if file:
+        file.file.seek(0)
+        file_url = upload_to_blob(file, "announcements")
+
+    cursor.execute(
+        """
+        UPDATE post_announcements
+        SET title=%s,
+            description=%s,
+            file_url=%s,
+            updated_at=GETDATE()
+        WHERE id=%s
+        """,
+        (title, description, file_url, announcement_id),
+    )
+    db.commit()
+
+    cursor.execute("SELECT * FROM post_announcements WHERE id=%s", (announcement_id,))
+    updated = cursor.fetchone()
+    updated = clean_row(updated)
+
+    await ws_manager.broadcast({
+        "event": "update_announcement",
+        "data": updated
+    })
+
+    return updated
+
 @app.get("/api/announcements")
 def get_announcements(token: dict = Depends(verify_token)):
     user_id = token.get("id")
