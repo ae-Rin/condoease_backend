@@ -434,7 +434,7 @@ async def create_announcement(
         file_path = os.path.join(upload_path, filename)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        
+
         file_url = f"/uploads/announcements/{filename}"
 
     cursor.execute("""
@@ -443,12 +443,14 @@ async def create_announcement(
     """, (title, description, file_url, user_id))
     db.commit()
 
-    cursor.execute("SELECT @@IDENTITY AS id")
+    cursor.execute("SELECT SCOPE_IDENTITY() AS id")
     ann_id = cursor.fetchone()["id"]
 
     cursor.execute("SELECT * FROM post_announcements WHERE id = %s", (ann_id,))
     row = cursor.fetchone()
     new_post = clean_row(row)
+    if new_post.get("file_url"):
+        new_post["file_url"] = f"https://condoease-backends.onrender.com{new_post['file_url']}"
 
     await ws_manager.broadcast({
         "event": "new_announcement",
