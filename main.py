@@ -16,7 +16,7 @@ import uvicorn
 from uuid import uuid4
 from datetime import datetime, timedelta
 from decimal import Decimal
-import json
+from azure_blob import upload_to_blob
 
 # Load .env
 load_dotenv()
@@ -426,16 +426,8 @@ async def create_announcement(
 
     file_url = None
     if file:
-        ext = file.filename.split(".")[-1]
-        filename = f"{uuid.uuid4()}.{ext}"
-        upload_path = os.path.join(UPLOAD_DIR, "announcements")
-        os.makedirs(upload_path, exist_ok=True)
-
-        file_path = os.path.join(upload_path, filename)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        file_url = f"/uploads/announcements/{filename}"
+        file.file.seek(0)
+        file_url = upload_to_blob(file, "announcements")
 
     cursor.execute("""
         INSERT INTO post_announcements (title, description, file_url, user_id, created_at)
@@ -449,8 +441,6 @@ async def create_announcement(
     cursor.execute("SELECT * FROM post_announcements WHERE id = %s", (ann_id,))
     row = cursor.fetchone()
     new_post = clean_row(row)
-    if new_post.get("file_url"):
-        new_post["file_url"] = f"https://condoease-backends.onrender.com{new_post['file_url']}"
 
     await ws_manager.broadcast({
         "event": "new_announcement",
