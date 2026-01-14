@@ -26,10 +26,8 @@ def delete_from_blob(blob_url: str):
      parts = blob_url.split("/")
      container = parts[-2]
      blob_name = parts[-1]
-
      blob_client = blob_service.get_blob_client(
           container=container,
           blob=blob_name
      )
-
      blob_client.delete_blob()

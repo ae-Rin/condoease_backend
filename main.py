@@ -457,8 +457,48 @@ async def update_announcement(
     })
     return updated
 
+# @app.delete("/api/announcements/{announcement_id}")
+# async def delete_announcement(
+#     announcement_id: int,
+#     token: dict = Depends(verify_token)
+# ):
+#     user_id = token.get("id")
+#     db = get_db()
+#     cursor = db.cursor(as_dict=True)
+#     cursor.execute("""
+#         SELECT id, file_url
+#         FROM post_announcements
+#         WHERE id = %s AND user_id = %s
+#     """, (announcement_id, user_id))
+#     ann = cursor.fetchone()
+#     if not ann:
+#         raise HTTPException(status_code=404, detail="Announcement not found")
+#     file_url = ann["file_url"]
+#     try:
+#         cursor.execute(
+#             "DELETE FROM post_announcements WHERE id = %s",
+#             (announcement_id,)
+#         )
+#         db.commit()
+#         if file_url:
+#             try:
+#                 from azure_blob import delete_from_blob
+#                 delete_from_blob(file_url)
+#             except Exception as e:
+#                 print("Failed to delete blob:", e)
+#         await ws_manager.broadcast({
+#             "event": "delete_announcement",
+#             "data": {
+#                 "id": announcement_id
+#             }
+#         })
+#         return {"success": True, "message": "Announcement deleted"}
+#     except Exception as e:
+#         db.rollback()
+#         print("❌ Delete announcement error:", str(e))
+#         raise HTTPException(status_code=500, detail="Failed to delete announcement")
 @app.delete("/api/announcements/{announcement_id}")
-async def delete_announcement(
+async def archive_announcement(
     announcement_id: int,
     token: dict = Depends(verify_token)
 ):
@@ -466,47 +506,39 @@ async def delete_announcement(
     db = get_db()
     cursor = db.cursor(as_dict=True)
     cursor.execute("""
-        SELECT id, file_url
+        SELECT id
         FROM post_announcements
-        WHERE id = %s AND user_id = %s
+        WHERE id = %s AND user_id = %s AND is_archived = 0
     """, (announcement_id, user_id))
     ann = cursor.fetchone()
     if not ann:
         raise HTTPException(status_code=404, detail="Announcement not found")
-    file_url = ann["file_url"]
     try:
-        cursor.execute(
-            "DELETE FROM post_announcements WHERE id = %s",
-            (announcement_id,)
-        )
+        cursor.execute("""
+            UPDATE post_announcements
+            SET is_archived = 1,
+                archived_at = GETDATE()
+            WHERE id = %s
+        """, (announcement_id,))
         db.commit()
-        if file_url:
-            try:
-                from azure_blob import delete_from_blob
-                delete_from_blob(file_url)
-            except Exception as e:
-                print("Failed to delete blob:", e)
         await ws_manager.broadcast({
-            "event": "delete_announcement",
-            "data": {
-                "id": announcement_id
-            }
+            "event": "archive_announcement",
+            "data": { "id": announcement_id }
         })
-        return {"success": True, "message": "Announcement deleted"}
+        return { "success": True, "message": "Announcement archived" }
     except Exception as e:
         db.rollback()
-        print("❌ Delete announcement error:", str(e))
-        raise HTTPException(status_code=500, detail="Failed to delete announcement")
+        raise HTTPException(status_code=500, detail="Archive failed")
+
 
 @app.get("/api/announcements")
 def get_announcements(token: dict = Depends(verify_token)):
     user_id = token.get("id")
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
     cursor.execute("""
         SELECT * FROM post_announcements
-        WHERE user_id = %s
+        WHERE user_id = %s AND is_archived = 0
         ORDER BY created_at DESC
     """, (user_id,))
     return cursor.fetchall()
