@@ -94,14 +94,12 @@ class MaintenanceDecision(BaseModel):
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
-
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
-
     def _clean(self, data):
         if isinstance(data, dict):
             return {k: self._clean(v) for k, v in data.items()}
@@ -122,9 +120,7 @@ class ConnectionManager:
                 await connection.send_json(safe_message)
             except Exception:
                 self.disconnect(connection)
-
 ws_manager = ConnectionManager()
-
 @app.websocket("/ws/announcements")
 async def announcement_ws(websocket: WebSocket):
     await ws_manager.connect(websocket)
@@ -168,13 +164,10 @@ def login_user(body: LoginRequest):
     cursor = db.cursor(as_dict=True)
     cursor.execute("SELECT * FROM users WHERE email = %s", (body.email,))
     user = cursor.fetchone()
-
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-
     if not pwd_context.verify(body.password, user['password']):
         raise HTTPException(status_code=401, detail="Incorrect password")
-
     token = jwt.encode(
         {
             "id": user['id'],
@@ -199,7 +192,6 @@ def update_avatar(avatar: UploadFile = File(...), token: dict = Depends(verify_t
     file_path = os.path.join(UPLOAD_DIR, filename)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(avatar.file, buffer)
-
     db = get_db()
     cursor = db.cursor()
     cursor.execute("UPDATE users SET avatar = %s WHERE id = %s", (f"/uploads/{filename}", user_id))
@@ -214,29 +206,23 @@ def update_user_profile(user_id: int, firstName: Optional[str] = Form(None), las
     row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
-
     stored_hashed_password = row[0]
     updates = []
     params = []
-
     if firstName and lastName:
         updates += ["first_name = %s", "last_name = %s"]
         params += [firstName, lastName]
-
     if email:
         updates.append("email = %s")
         params.append(email)
-
     if currentPassword and password and currentPassword != password:
         if not pwd_context.verify(currentPassword, stored_hashed_password):
             raise HTTPException(status_code=401, detail="Incorrect current password")
         new_hashed = pwd_context.hash(password)
         updates.append("password = %s")
         params.append(new_hashed)
-
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
-
     params.append(user_id)
     cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = %s", tuple(params))
     db.commit()
@@ -251,7 +237,6 @@ def update_maintenance_request(
     role = token.get("role")
     if role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Unauthorized")
-
     db = get_db()
     cursor = db.cursor()
     try:
@@ -260,7 +245,6 @@ def update_maintenance_request(
         """, (request_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Maintenance request not found")
-
         cursor.execute("""
             UPDATE maintenance_requests
             SET
@@ -275,10 +259,8 @@ def update_maintenance_request(
             body.scheduled_at,
             request_id
         ))
-
         db.commit()
         return {"success": True, "message": "Maintenance request updated"}
-
     except HTTPException:
         raise
     except Exception as e:
@@ -298,25 +280,20 @@ def complete_maintenance_request(
     role = token.get("role")
     if role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Unauthorized")
-
     db = get_db()
     cursor = db.cursor()
-
     try:
         cursor.execute("""
             SELECT status FROM maintenance_requests WHERE id = %s
         """, (request_id,))
         row = cursor.fetchone()
-
         if not row:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
-
         if row[0] != "ongoing":
             raise HTTPException(
                 status_code=400,
                 detail="Only ongoing requests can be completed"
             )
-
         cursor.execute("""
             UPDATE maintenance_requests
             SET
@@ -338,10 +315,8 @@ def complete_maintenance_request(
             ext = os.path.splitext(invoice.filename)[-1]
             filename = f"invoice_{uuid.uuid4()}{ext}"
             file_path = os.path.join(UPLOAD_DIR, filename)
-
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(invoice.file, buffer)
-
             cursor.execute("""
                 INSERT INTO maintenance_attachments
                 (request_id, file_url, file_type, uploaded_at)
@@ -351,18 +326,16 @@ def complete_maintenance_request(
                 f"/uploads/{filename}",
                 invoice.content_type
             ))
-
         db.commit()
         return {
             "success": True,
             "message": "Maintenance request marked as completed"
         }
-
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        print("❌ Completion error:", str(e))
+        print("Error completing maintenance request:", str(e))
         raise HTTPException(status_code=500, detail="Failed to complete maintenance request")
     
 @app.get("/api/maintenance-completed/{request_id}")
@@ -393,7 +366,6 @@ def get_completed_maintenance_request_by_id(request_id: int, token: dict = Depen
             WHERE mr.id = %s
         """, (request_id,))
         result = cursor.fetchone()
-        
         if not result:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
         cursor.execute("""
@@ -408,9 +380,8 @@ def get_completed_maintenance_request_by_id(request_id: int, token: dict = Depen
         attachments = cursor.fetchall()
         result["attachments"] = attachments
         return result
-
     except Exception as e:
-        print("❌ Error fetching request by ID:", str(e))
+        print("Error fetching request by ID:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance request")
 
 @app.post("/api/announcements")
@@ -423,30 +394,24 @@ async def create_announcement(
     user_id = token.get("id")
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
     file_url = None
     if file:
         file.file.seek(0)
         file_url = upload_to_blob(file, "announcements")
-
     cursor.execute("""
         INSERT INTO post_announcements (title, description, file_url, user_id, created_at)
         VALUES (%s, %s, %s, %s, GETDATE())
     """, (title, description, file_url, user_id))
     db.commit()
-
     cursor.execute("SELECT SCOPE_IDENTITY() AS id")
     ann_id = cursor.fetchone()["id"]
-
     cursor.execute("SELECT * FROM post_announcements WHERE id = %s", (ann_id,))
     row = cursor.fetchone()
     new_post = clean_row(row)
-
     await ws_manager.broadcast({
         "event": "new_announcement",
         "data": new_post
     })
-
     return new_post
 
 @app.put("/api/announcements/{announcement_id}")
@@ -460,22 +425,17 @@ async def update_announcement(
     user_id = token.get("id")
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
     cursor.execute(
         "SELECT * FROM post_announcements WHERE id=%s AND user_id=%s",
         (announcement_id, user_id),
     )
     existing = cursor.fetchone()
-
     if not existing:
         raise HTTPException(status_code=404, detail="Announcement not found")
-
     file_url = existing["file_url"]
-
     if file:
         file.file.seek(0)
         file_url = upload_to_blob(file, "announcements")
-
     cursor.execute(
         """
         UPDATE post_announcements
@@ -488,17 +448,55 @@ async def update_announcement(
         (title, description, file_url, announcement_id),
     )
     db.commit()
-
     cursor.execute("SELECT * FROM post_announcements WHERE id=%s", (announcement_id,))
     updated = cursor.fetchone()
     updated = clean_row(updated)
-
     await ws_manager.broadcast({
         "event": "update_announcement",
         "data": updated
     })
-
     return updated
+
+@app.delete("/api/announcements/{announcement_id}")
+async def delete_announcement(
+    announcement_id: int,
+    token: dict = Depends(verify_token)
+):
+    user_id = token.get("id")
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+    cursor.execute("""
+        SELECT id, file_url
+        FROM post_announcements
+        WHERE id = %s AND user_id = %s
+    """, (announcement_id, user_id))
+    ann = cursor.fetchone()
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    file_url = ann["file_url"]
+    try:
+        cursor.execute(
+            "DELETE FROM post_announcements WHERE id = %s",
+            (announcement_id,)
+        )
+        db.commit()
+        if file_url:
+            try:
+                from azure_blob import delete_from_blob
+                delete_from_blob(file_url)
+            except Exception as e:
+                print("Failed to delete blob:", e)
+        await ws_manager.broadcast({
+            "event": "delete_announcement",
+            "data": {
+                "id": announcement_id
+            }
+        })
+        return {"success": True, "message": "Announcement deleted"}
+    except Exception as e:
+        db.rollback()
+        print("❌ Delete announcement error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to delete announcement")
 
 @app.get("/api/announcements")
 def get_announcements(token: dict = Depends(verify_token)):
@@ -539,19 +537,16 @@ async def create_tenant(
 ):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
     cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
     existing_user = cursor.fetchone()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already has an account")
-
     extension = os.path.splitext(idDocument.filename)[-1]
     filename = f"{uuid4()}{extension}"
     file_path = os.path.join("uploads", "id", "tenants", filename)
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(idDocument.file, buffer)
-
     try:
         temp_password = pwd_context.hash("changeme123")
         cursor.execute("""
@@ -559,10 +554,8 @@ async def create_tenant(
             VALUES (%s, %s, %s, %s, 'tenant', GETDATE())
         """, (firstName, lastName, email, temp_password))
         db.commit()
-
         cursor.execute("SELECT @@IDENTITY AS id")
         new_user_id = cursor.fetchone()["id"]
-
         cursor.execute("""
             INSERT INTO tenants (
                 user_id, last_name, first_name, email, contact_number,
@@ -581,7 +574,6 @@ async def create_tenant(
         ))
         db.commit()
         return {"message": "Tenant created successfully", "user_id": new_user_id}
-
     except Exception as e:
         db.rollback()
         print("TenantInsert Error:", str(e))
@@ -609,26 +601,20 @@ async def update_tenant(
 ):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
     cursor.execute("SELECT * FROM tenants WHERE id = %s", (tenant_id,))
     tenant = cursor.fetchone()
     if not tenant:
         raise HTTPException(404, "Tenant not found")
-
     new_doc = tenant["id_document"]
-
     if idDocument:
         ext = os.path.splitext(idDocument.filename)[-1]
         filename = f"{uuid4()}{ext}"
         upload_path = f"uploads/id/tenants/{filename}"
-
         with open(upload_path, "wb") as f:
             shutil.copyfileobj(idDocument.file, f)
-
         old_path = f"uploads/id/tenants/{tenant['id_document']}"
         if os.path.exists(old_path):
             os.remove(old_path)
-
         new_doc = filename
 
     try:
@@ -660,27 +646,21 @@ async def update_tenant(
 async def delete_tenant(tenant_id: int, token: dict = Depends(verify_token)):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
     cursor.execute("SELECT * FROM tenants WHERE id=%s", (tenant_id,))
     tenant = cursor.fetchone()
     if not tenant:
         raise HTTPException(404, "Tenant not found")
-
     try:
         file_path = f"uploads/id/tenants/{tenant['id_document']}"
         if os.path.exists(file_path):
             os.remove(file_path)
-
         cursor.execute("DELETE FROM tenants WHERE id=%s", (tenant_id,))
         cursor.execute("DELETE FROM users WHERE id=%s", (tenant["user_id"]))
         db.commit()
-
         return {"message": "Tenant deleted successfully"}
-
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Delete failed: {e}")
-
 @router.post("/api/property-owners")
 async def create_property_owner(
     lastName: str = Form(...),
@@ -700,32 +680,26 @@ async def create_property_owner(
 ):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-    
     cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
     existing_user = cursor.fetchone()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already has an account")
-
     temp_password = pwd_context.hash("changeme123")
     cursor.execute("""
         INSERT INTO users (first_name, last_name, email, password, role, created_at)
         VALUES (%s, %s, %s, %s, 'owner', GETDATE())
     """, (firstName, lastName, email, temp_password))
     db.commit()
-
     cursor.execute("SELECT @@IDENTITY AS id")
     user_id = cursor.fetchone()["id"]
-
     upload_dir = "uploads/id/property-owners"
     os.makedirs(upload_dir, exist_ok=True)
     file_extension = idDocument.filename.split(".")[-1]
     new_filename = f"owner_{user_id}_{uuid.uuid4()}.{file_extension}"
     file_path = os.path.join(upload_dir, new_filename)
-
     with open(file_path, "wb") as f:
         f.write(await idDocument.read())
     saved_file_path = f"/uploads/id/property-owners/{new_filename}"
-
     try:
         cursor.execute("""
             INSERT INTO property_owners (
@@ -750,7 +724,6 @@ async def create_property_owner(
             "user_id": user_id,
             "file": saved_file_path
         }
-
     except Exception as e:
         db.rollback()
         print(" Property Owner Insert Error:", str(e))
@@ -776,28 +749,21 @@ async def update_property_owner(
 ):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
     cursor.execute("SELECT * FROM property_owners WHERE owner_id=%s", (owner_id,))
     owner = cursor.fetchone()
     if not owner:
         raise HTTPException(404, "Owner not found")
-
     new_doc = owner["id_document"]
-
     if idDocument:
         ext = os.path.splitext(idDocument.filename)[-1]
         filename = f"owner_{owner_id}_{uuid4()}{ext}"
         upload_path = f"uploads/id/property-owners/{filename}"
-
         with open(upload_path, "wb") as f:
             f.write(await idDocument.read())
-
         old_path = owner["id_document"].lstrip("/")
         if os.path.exists(old_path):
             os.remove(old_path)
-
         new_doc = f"/uploads/id/property-owners/{filename}"
-
     try:
         cursor.execute("""
             UPDATE property_owners SET
@@ -816,7 +782,6 @@ async def update_property_owner(
         ))
         db.commit()
         return {"message": "Property owner updated successfully"}
-
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Update failed: {e}")
@@ -825,23 +790,18 @@ async def update_property_owner(
 async def delete_property_owner(owner_id: int, token: dict = Depends(verify_token)):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
     cursor.execute("SELECT * FROM property_owners WHERE owner_id=%s", (owner_id,))
     owner = cursor.fetchone()
     if not owner:
         raise HTTPException(404, "Owner not found")
-
     try:
         old_doc = owner["id_document"].lstrip("/")
         if os.path.exists(old_doc):
             os.remove(old_doc)
-
         cursor.execute("DELETE FROM property_owners WHERE owner_id=%s", (owner_id,))
         cursor.execute("DELETE FROM users WHERE id=%s", (owner["user_id"]))
         db.commit()
-
         return {"message": "Property owner deleted successfully"}
-
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Delete failed: {e}")
@@ -897,7 +857,6 @@ async def create_property(
             status_code=400,
             detail="Property already exists for this owner and address."
         )
-    
     try:
         cursor.execute("""
             INSERT INTO properties (
@@ -919,24 +878,20 @@ async def create_property(
         db.commit()
         cursor.execute("SELECT @@IDENTITY AS id")
         property_id = cursor.fetchone()["id"]
-
     except Exception as e:
         db.rollback()
         print("Property Insert Error →", e)
         raise HTTPException(status_code=500, detail="Failed to save property details")
-
     try:
         for i in range(1, units + 1):
             cursor.execute("""
                 INSERT INTO property_units (property_id, unit_number, status, created_at, updated_at)
                 VALUES (%s, %s, 'vacant', GETDATE(), GETDATE())
             """, (property_id, f"Unit {i}"))
-
         db.commit()
     except Exception as e:
         db.rollback()
         print("Unit Insert Error →", e)
-
     return {
         "success": True,
         "message": "Property created successfully",
@@ -962,12 +917,10 @@ async def update_property(
 ):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
     cursor.execute("SELECT * FROM properties WHERE id=%s", (property_id,))
     prop = cursor.fetchone()
     if not prop:
         raise HTTPException(404, "Property not found")
-
     cursor.execute("""
         SELECT id FROM properties
         WHERE property_name=%s AND registered_owner=%s AND
@@ -981,7 +934,6 @@ async def update_property(
     dup = cursor.fetchone()
     if dup:
         raise HTTPException(400, "Another property already exists with this address")
-
     try:
         cursor.execute("""
             UPDATE properties SET
@@ -997,9 +949,7 @@ async def update_property(
             property_id
         ))
         db.commit()
-
         return {"message": "Property updated successfully"}
-
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Update failed: {e}")
@@ -1008,19 +958,15 @@ async def update_property(
 async def delete_property(property_id: int, token: dict = Depends(verify_token)):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
     cursor.execute("SELECT * FROM properties WHERE id=%s", (property_id,))
     prop = cursor.fetchone()
     if not prop:
         raise HTTPException(404, "Property not found")
-
     try:
         cursor.execute("DELETE FROM property_units WHERE property_id=%s", (property_id,))
         cursor.execute("DELETE FROM properties WHERE id=%s", (property_id,))
         db.commit()
-
         return {"message": "Property deleted successfully"}
-
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Delete failed: {e}")
@@ -1051,11 +997,9 @@ async def create_property_unit(
             status_code=400,
             detail=f"Unit '{unitNumber}' already exists for this property."
         )
-    
     upload_dir = "uploads/unit-images"
     os.makedirs(upload_dir, exist_ok=True)
     saved_images = []
-    
     try:
         cursor.execute("""
             INSERT INTO property_units
@@ -1067,7 +1011,6 @@ async def create_property_unit(
             rentPrice, depositPrice, floor, size, description
         ))
         db.commit()
-
         cursor.execute("SELECT SCOPE_IDENTITY() AS id")
         new_unit_id = cursor.fetchone()["id"]
         for file in unitImages:
@@ -1092,7 +1035,6 @@ async def create_property_unit(
         db.rollback()
         print("CreateUnit Error:", str(e))
         raise HTTPException(status_code=400, detail=str(e))
-        # raise HTTPException(status_code=500, detail="Failed to create property unit.")
         
 @router.put("/api/property-units/{unit_id}")
 async def update_property_unit(
@@ -1115,7 +1057,6 @@ async def update_property_unit(
     unit = cursor.fetchone()
     if not unit:
         raise HTTPException(404, "Unit not found")
-
     cursor.execute("""
         SELECT id FROM property_units
         WHERE property_id=%s AND unit_number=%s AND id != %s
@@ -1123,7 +1064,6 @@ async def update_property_unit(
     dup = cursor.fetchone()
     if dup:
         raise HTTPException(400, "Unit number already exists")
-
     try:
         cursor.execute("""
             UPDATE property_units SET
@@ -1137,7 +1077,6 @@ async def update_property_unit(
             size, description, unit_id
         ))
         db.commit()
-
         if unitImages:
             cursor.execute("SELECT * FROM unit_images WHERE unit_id=%s", (unit_id,))
             old_imgs = cursor.fetchall()
@@ -1145,28 +1084,21 @@ async def update_property_unit(
                 old_path = f"uploads/unit-images/{img['image_path']}"
                 if os.path.exists(old_path):
                     os.remove(old_path)
-
             cursor.execute("DELETE FROM unit_images WHERE unit_id=%s", (unit_id,))
-
             upload_dir = "uploads/unit-images"
             os.makedirs(upload_dir, exist_ok=True)
-
             for file in unitImages:
                 ext = os.path.splitext(file.filename)[-1]
                 new_name = f"{uuid4()}{ext}"
                 file_path = os.path.join(upload_dir, new_name)
                 with open(file_path, "wb") as f:
                     shutil.copyfileobj(file.file, f)
-
                 cursor.execute("""
                     INSERT INTO unit_images (unit_id, image_path)
                     VALUES (%s, %s)
                 """, (unit_id, new_name))
-
             db.commit()
-
         return {"message": "Unit updated successfully"}
-
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Update failed: {e}")
@@ -1175,31 +1107,24 @@ async def update_property_unit(
 async def delete_property_unit(unit_id: int, token: dict = Depends(verify_token)):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
     cursor.execute("SELECT * FROM property_units WHERE id=%s", (unit_id,))
     unit = cursor.fetchone()
     if not unit:
         raise HTTPException(404, "Unit not found")
-
     try:
         cursor.execute("SELECT * FROM unit_images WHERE unit_id=%s", (unit_id,))
         imgs = cursor.fetchall()
-
         for img in imgs:
             path = f"uploads/unit-images/{img['image_path']}"
             if os.path.exists(path):
                 os.remove(path)
-
         cursor.execute("DELETE FROM unit_images WHERE unit_id=%s", (unit_id,))
         cursor.execute("DELETE FROM property_units WHERE id=%s", (unit_id,))
         db.commit()
-
         return {"message": "Unit deleted successfully"}
-
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Delete failed: {e}")
-
 UPLOAD_DIR = "uploads/leases"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -1228,8 +1153,6 @@ async def create_lease(
 ):
     db = get_db()
     cursor = db.cursor()
-
-    # Save uploaded docs
     saved_files = []
     for doc in leaseDocuments:
         filename = f"{uuid.uuid4()}-{doc.filename}"
@@ -1237,8 +1160,6 @@ async def create_lease(
         with open(filepath, "wb") as buffer:
             shutil.copyfileobj(doc.file, buffer)
         saved_files.append(f"/{UPLOAD_DIR}/{filename}")
-
-    # Insert into leases table
     query = """
     INSERT INTO leases (
         property_id, property_unit_id, tenant_id,
@@ -1278,7 +1199,6 @@ async def create_lease(
         "bill_tax": bills_tax,
         "bill_tax_amount": bills_taxAmount,
     }
-
     try:
         cursor.execute(query, params)
         db.commit()
@@ -1445,10 +1365,8 @@ def get_maintenance_request_by_id(request_id: int, token: dict = Depends(verify_
             WHERE mr.id = %s
         """, (request_id,))
         result = cursor.fetchone()
-
         if not result:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
-
         cursor.execute("""
             SELECT 
                 id AS attachment_id,
@@ -1459,11 +1377,8 @@ def get_maintenance_request_by_id(request_id: int, token: dict = Depends(verify_
             WHERE request_id = %s
         """, (request_id,))
         attachments = cursor.fetchall()
-
         result["attachments"] = attachments
-
         return result
-
     except Exception as e:
         print("❌ Error fetching request by ID:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance request")
@@ -1536,10 +1451,8 @@ async def submit_maintenance_request(
             ) VALUES (%s, %s, %s, %s, %s, %s, GETDATE(), GETDATE())
         """, (tenant_id, maintenance_type, category, description, "pending", scheduled_dt))
         db.commit()
-
         cursor.execute("SELECT SCOPE_IDENTITY()")
         request_id = cursor.fetchone()[0]
-
         saved_files = []
         if files:
             for upload in files:
@@ -1547,13 +1460,11 @@ async def submit_maintenance_request(
                 file_path = os.path.join(UPLOAD_DIR, filename)
                 with open(file_path, "wb") as buffer:
                     shutil.copyfileobj(upload.file, buffer)
-
                 cursor.execute("""
                     INSERT INTO maintenance_attachments (request_id, file_url, file_type, uploaded_at)
                     VALUES (%s, %s, %s, GETDATE())
                 """, (request_id, f"/uploads/{filename}", upload.content_type))
                 saved_files.append(filename)
-
         db.commit()
         return {
             "success": True,
@@ -1561,7 +1472,6 @@ async def submit_maintenance_request(
             "request_id": request_id,
             "attachments": saved_files
         }
-
     except Exception as e:
         print("❌ Maintenance request error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to submit maintenance request")
