@@ -19,8 +19,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from azure_blob import upload_to_blob
 import requests
-from utils.email import send_otp_email
-from utils.security import hash_password
+import send_otp_email
+import hash_password
 from db import get_db
 
 # Load .env
