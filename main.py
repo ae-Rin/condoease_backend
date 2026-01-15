@@ -18,13 +18,14 @@ from uuid import uuid4
 from datetime import datetime, timedelta
 from decimal import Decimal
 from azure_blob import upload_to_blob
-import requests
+# import requests
+from email import send_otp_email
 
 # Load .env
 load_dotenv()
 SECRET_KEY = os.getenv("JWT_SECRET")
 ALGORITHM = "HS256"
-BREVO_KEY = os.getenv("BREVO_API_KEY")
+# BREVO_KEY = os.getenv("BREVO_API_KEY")
 
 # Bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -55,24 +56,24 @@ def clean_row(row):
             safe[k] = v
     return safe
 
-def send_otp_email(to_email, otp):
-    requests.post(
-        "https://api.brevo.com/v3/smtp/email",
-        headers={
-            "api-key": BREVO_KEY,
-            "Content-Type": "application/json"
-        },
-        json={
-            "sender": {"name": "CondoEase", "email": "noreply@condoease.me"},
-            "to": [{"email": to_email}],
-            "subject": "Your CondoEase Verification Code",
-            "htmlContent": f"""
-                <h2>Your verification code</h2>
-                <h1 style='color:#F28D35'>{otp}</h1>
-                <p>This code expires in 10 minutes.</p>
-            """
-        }
-    )
+# def send_otp_email(to_email, otp):
+#     requests.post(
+#         "https://api.brevo.com/v3/smtp/email",
+#         headers={
+#             "api-key": BREVO_KEY,
+#             "Content-Type": "application/json"
+#         },
+#         json={
+#             "sender": {"name": "CondoEase", "email": "noreply@condoease.me"},
+#             "to": [{"email": to_email}],
+#             "subject": "Your CondoEase Verification Code",
+#             "htmlContent": f"""
+#                 <h2>Your verification code</h2>
+#                 <h1 style='color:#F28D35'>{otp}</h1>
+#                 <p>This code expires in 10 minutes.</p>
+#             """
+#         }
+#     )
 
 # App instance
 app = FastAPI()
@@ -93,11 +94,11 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Auth Schemas
-class RegisterRequest(BaseModel):
-    firstName: str
-    lastName: str
-    email: str
-    password: str
+# class RegisterRequest(BaseModel):
+#     firstName: str
+#     lastName: str
+#     email: str
+#     password: str
 
 class LoginRequest(BaseModel):
     email: str
@@ -702,7 +703,7 @@ async def register(
     existing = db.execute("SELECT id FROM users WHERE email=@e", {"e": email}).fetchone()
     if existing:
         raise HTTPException(400, "Email already registered")
-    password_hash = hash_password(password)
+    password_hash = pwd_context.hash(password)
     otp = str(random.randint(100000, 999999))
     user = db.execute("""
         INSERT INTO users (first_name,last_name,email,password_hash,role,pending_otp,email_verified)
