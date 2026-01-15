@@ -18,14 +18,12 @@ from uuid import uuid4
 from datetime import datetime, timedelta
 from decimal import Decimal
 from azure_blob import upload_to_blob
-# import requests
-from email import send_otp_email
+from utils.email import send_otp_email
 
 # Load .env
 load_dotenv()
 SECRET_KEY = os.getenv("JWT_SECRET")
 ALGORITHM = "HS256"
-# BREVO_KEY = os.getenv("BREVO_API_KEY")
 
 # Bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -55,26 +53,6 @@ def clean_row(row):
         else:
             safe[k] = v
     return safe
-
-# def send_otp_email(to_email, otp):
-#     requests.post(
-#         "https://api.brevo.com/v3/smtp/email",
-#         headers={
-#             "api-key": BREVO_KEY,
-#             "Content-Type": "application/json"
-#         },
-#         json={
-#             "sender": {"name": "CondoEase", "email": "noreply@condoease.me"},
-#             "to": [{"email": to_email}],
-#             "subject": "Your CondoEase Verification Code",
-#             "htmlContent": f"""
-#                 <h2>Your verification code</h2>
-#                 <h1 style='color:#F28D35'>{otp}</h1>
-#                 <p>This code expires in 10 minutes.</p>
-#             """
-#         }
-#     )
-
 # App instance
 app = FastAPI()
 
@@ -514,7 +492,6 @@ async def archive_announcement(
         db.rollback()
         raise HTTPException(status_code=500, detail="Archive failed")
 
-
 @app.get("/api/announcements")
 def get_announcements(token: dict = Depends(verify_token)):
     user_id = token.get("id")
@@ -761,6 +738,24 @@ async def register(
         })
     db.commit()
     send_otp_email(email, otp)
+    return {"success": True}
+
+@router.post("/api/verifyemail")
+def verify_email(data: dict):
+    db = get_db()
+    email = data["email"]
+    code = data["confirmationCode"]
+    user = db.execute(
+        "SELECT id,pending_otp FROM users WHERE email=@e",
+        {"e": email}
+    ).fetchone()
+    if not user or user.pending_otp != code:
+        return {"success": False, "error": "Invalid code"}
+    db.execute("""
+        UPDATE users SET email_verified=1, pending_otp=NULL
+        WHERE id=@id
+    """, {"id": user.id})
+    db.commit()
     return {"success": True}
     
 @router.post("/api/property-owners")
