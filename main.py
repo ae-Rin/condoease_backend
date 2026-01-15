@@ -19,9 +19,6 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from azure_blob import upload_to_blob
 import requests
-import send_otp_email
-import hash_password
-import get_db
 
 # Load .env
 load_dotenv()
@@ -680,7 +677,7 @@ async def delete_tenant(tenant_id: int, token: dict = Depends(verify_token)):
         raise HTTPException(500, f"Delete failed: {e}")
     
 @router.post("/api/registerstep2")
-async def register_user(
+async def register(
     firstName: str = Form(...),
     lastName: str = Form(...),
     email: str = Form(...),
@@ -763,24 +760,6 @@ async def register_user(
         })
     db.commit()
     send_otp_email(email, otp)
-    return {"success": True}
-    
-@router.post("/api/verifyemail")
-def verify_email(data: dict):
-    db = get_db()
-    email = data["email"]
-    code = data["confirmationCode"]
-    user = db.execute(
-        "SELECT id,pending_otp FROM users WHERE email=@e",
-        {"e": email}
-    ).fetchone()
-    if not user or user.pending_otp != code:
-        return {"success": False, "error": "Invalid code"}
-    db.execute("""
-        UPDATE users SET email_verified=1, pending_otp=NULL
-        WHERE id=@id
-    """, {"id": user.id})
-    db.commit()
     return {"success": True}
     
 @router.post("/api/property-owners")
