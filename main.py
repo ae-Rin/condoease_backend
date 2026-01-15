@@ -19,13 +19,15 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from azure_blob import upload_to_blob
 import requests
-from email import send_otp_email
-from hash_password import hash_password
+import send_otp_email
+import hash_password
+import get_db
 
 # Load .env
 load_dotenv()
 SECRET_KEY = os.getenv("JWT_SECRET")
 ALGORITHM = "HS256"
+BREVO_KEY = os.getenv("BREVO_API_KEY")
 
 # Bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -55,6 +57,26 @@ def clean_row(row):
         else:
             safe[k] = v
     return safe
+
+def send_otp_email(to_email, otp):
+    requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers={
+            "api-key": BREVO_KEY,
+            "Content-Type": "application/json"
+        },
+        json={
+            "sender": {"name": "CondoEase", "email": "noreply@condoease.me"},
+            "to": [{"email": to_email}],
+            "subject": "Your CondoEase Verification Code",
+            "htmlContent": f"""
+                <h2>Your verification code</h2>
+                <h1 style='color:#F28D35'>{otp}</h1>
+                <p>This code expires in 10 minutes.</p>
+            """
+        }
+    )
+
 # App instance
 app = FastAPI()
 
@@ -74,6 +96,12 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Auth Schemas
+class RegisterRequest(BaseModel):
+    firstName: str
+    lastName: str
+    email: str
+    password: str
+
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -139,6 +167,22 @@ def verify_token(request: Request):
         return payload
     except JWTError:
         raise HTTPException(status_code=403, detail="Invalid token")
+
+# @app.post("/api/registerstep2")
+# def register_user(body: RegisterRequest):
+#     db = get_db()
+#     cursor = db.cursor()
+#     hashed = pwd_context.hash(body.password)
+#     try:
+#         cursor.execute("""
+#             INSERT INTO users (first_name, last_name, email, password, role)
+#             VALUES (%s, %s, %s, %s, %s)
+#         """, (body.firstName, body.lastName, body.email, hashed, "tenant"))
+#         db.commit()
+#         return {"success": True}
+#     except Exception as e:
+#         print("Registration error:", e)
+#         raise HTTPException(status_code=500, detail="Registration failed")
 
 @app.post("/api/login")
 def login_user(body: LoginRequest):
