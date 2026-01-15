@@ -654,7 +654,7 @@ async def delete_tenant(tenant_id: int, token: dict = Depends(verify_token)):
         db.rollback()
         raise HTTPException(500, f"Delete failed: {e}")
     
-@router.post("/api/registerstep2")
+@router.post("/api/register")
 async def register(
     firstName: str = Form(...),
     lastName: str = Form(...),
