@@ -21,7 +21,6 @@ from azure_blob import upload_to_blob
 import requests
 import send_otp_email
 import hash_password
-from db import get_db
 
 # Load .env
 load_dotenv()
