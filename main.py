@@ -677,9 +677,14 @@ async def register(
     bankAccountNumber: str = Form(None),
 ):
     db = get_db()
-    existing = db.execute("SELECT id FROM users WHERE email=@e", {"e": email}).fetchone()
-    if existing:
-        raise HTTPException(400, "Email already registered")
+    cursor = db.cursor(as_dict=True)
+    cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+    existing_user = cursor.fetchone()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already has an account")
+    # existing = db.execute("SELECT id FROM users WHERE email=@e", {"e": email}).fetchone()
+    # if existing:
+    #     raise HTTPException(400, "Email already registered")
     password_hash = pwd_context.hash(password)
     otp = str(random.randint(100000, 999999))
     user = db.execute("""
@@ -697,7 +702,12 @@ async def register(
     user_id = user.id
     # id_url = await upload_to_blob(idDocument, f"id/{user_id}")
     try:
-        id_url = await upload_to_blob(idDocument, f"id/{user.id}")
+        # id_url = await upload_to_blob(idDocument, f"id/{user.id}")
+        id_url = upload_to_blob(
+            idDocument,
+            "tenantiddocuments",
+            f"{user_id}"
+        )
     except Exception as e:
         print("Azure Blob upload error:", str(e))
         raise HTTPException(500, "Failed to upload ID document")
@@ -1587,6 +1597,18 @@ async def submit_maintenance_request(
     except Exception as e:
         print("❌ Maintenance request error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to submit maintenance request")
+    
+@app.get("/api/announcements")
+async def get_announcements():
+    conn = get_db()
+    cursor = conn.cursor(as_dict=True)
+    cursor.execute("""
+        SELECT id, title, description, file_url, created_at
+        FROM post_announcements
+        ORDER BY created_at DESC
+    """)
+    rows = cursor.fetchall()
+    return rows
     
 app.include_router(router)
 
