@@ -1,3 +1,4 @@
+from random import random
 import shutil
 import time
 import os       
@@ -17,11 +18,16 @@ from uuid import uuid4
 from datetime import datetime, timedelta
 from decimal import Decimal
 from azure_blob import upload_to_blob
+import requests
+from utils.email import send_otp_email
+from utils.security import hash_password
+from db import get_db
 
 # Load .env
 load_dotenv()
 SECRET_KEY = os.getenv("JWT_SECRET")
 ALGORITHM = "HS256"
+BREVO_KEY = os.getenv("BREVO_API_KEY")
 
 # Bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -51,6 +57,26 @@ def clean_row(row):
         else:
             safe[k] = v
     return safe
+
+def send_otp_email(to_email, otp):
+    requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers={
+            "api-key": BREVO_KEY,
+            "Content-Type": "application/json"
+        },
+        json={
+            "sender": {"name": "CondoEase", "email": "noreply@condoease.me"},
+            "to": [{"email": to_email}],
+            "subject": "Your CondoEase Verification Code",
+            "htmlContent": f"""
+                <h2>Your verification code</h2>
+                <h1 style='color:#F28D35'>{otp}</h1>
+                <p>This code expires in 10 minutes.</p>
+            """
+        }
+    )
+
 # App instance
 app = FastAPI()
 
@@ -142,21 +168,21 @@ def verify_token(request: Request):
     except JWTError:
         raise HTTPException(status_code=403, detail="Invalid token")
 
-@app.post("/api/registerstep2")
-def register_user(body: RegisterRequest):
-    db = get_db()
-    cursor = db.cursor()
-    hashed = pwd_context.hash(body.password)
-    try:
-        cursor.execute("""
-            INSERT INTO users (first_name, last_name, email, password, role)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (body.firstName, body.lastName, body.email, hashed, "tenant"))
-        db.commit()
-        return {"success": True}
-    except Exception as e:
-        print("Registration error:", e)
-        raise HTTPException(status_code=500, detail="Registration failed")
+# @app.post("/api/registerstep2")
+# def register_user(body: RegisterRequest):
+#     db = get_db()
+#     cursor = db.cursor()
+#     hashed = pwd_context.hash(body.password)
+#     try:
+#         cursor.execute("""
+#             INSERT INTO users (first_name, last_name, email, password, role)
+#             VALUES (%s, %s, %s, %s, %s)
+#         """, (body.firstName, body.lastName, body.email, hashed, "tenant"))
+#         db.commit()
+#         return {"success": True}
+#     except Exception as e:
+#         print("Registration error:", e)
+#         raise HTTPException(status_code=500, detail="Registration failed")
 
 @app.post("/api/login")
 def login_user(body: LoginRequest):
@@ -457,46 +483,6 @@ async def update_announcement(
     })
     return updated
 
-# @app.delete("/api/announcements/{announcement_id}")
-# async def delete_announcement(
-#     announcement_id: int,
-#     token: dict = Depends(verify_token)
-# ):
-#     user_id = token.get("id")
-#     db = get_db()
-#     cursor = db.cursor(as_dict=True)
-#     cursor.execute("""
-#         SELECT id, file_url
-#         FROM post_announcements
-#         WHERE id = %s AND user_id = %s
-#     """, (announcement_id, user_id))
-#     ann = cursor.fetchone()
-#     if not ann:
-#         raise HTTPException(status_code=404, detail="Announcement not found")
-#     file_url = ann["file_url"]
-#     try:
-#         cursor.execute(
-#             "DELETE FROM post_announcements WHERE id = %s",
-#             (announcement_id,)
-#         )
-#         db.commit()
-#         if file_url:
-#             try:
-#                 from azure_blob import delete_from_blob
-#                 delete_from_blob(file_url)
-#             except Exception as e:
-#                 print("Failed to delete blob:", e)
-#         await ws_manager.broadcast({
-#             "event": "delete_announcement",
-#             "data": {
-#                 "id": announcement_id
-#             }
-#         })
-#         return {"success": True, "message": "Announcement deleted"}
-#     except Exception as e:
-#         db.rollback()
-#         print("❌ Delete announcement error:", str(e))
-#         raise HTTPException(status_code=500, detail="Failed to delete announcement")
 @app.delete("/api/announcements/{announcement_id}")
 async def archive_announcement(
     announcement_id: int,
@@ -648,7 +634,6 @@ async def update_tenant(
         if os.path.exists(old_path):
             os.remove(old_path)
         new_doc = filename
-
     try:
         cursor.execute("""
             UPDATE tenants SET
@@ -693,6 +678,111 @@ async def delete_tenant(tenant_id: int, token: dict = Depends(verify_token)):
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Delete failed: {e}")
+    
+@router.post("/api/registerstep2")
+async def register_user(
+    firstName: str = Form(...),
+    lastName: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    role: str = Form(...),
+    contactNumber: str = Form(...),
+    street: str = Form(...),
+    barangay: str = Form(...),
+    city: str = Form(...),
+    province: str = Form(...),
+    idType: str = Form(...),
+    idNumber: str = Form(...),
+    idDocument: UploadFile = File(...),
+    occupationStatus: str = Form(None),
+    occupationPlace: str = Form(None),
+    emergencyContactName: str = Form(None),
+    emergencyContactNumber: str = Form(None),
+    bankAssociated: str = Form(None),
+    bankAccountNumber: str = Form(None),
+):
+    db = get_db()
+    existing = db.execute("SELECT id FROM users WHERE email=@e", {"e": email}).fetchone()
+    if existing:
+        raise HTTPException(400, "Email already registered")
+    password_hash = hash_password(password)
+    otp = str(random.randint(100000, 999999))
+    user = db.execute("""
+        INSERT INTO users (first_name,last_name,email,password_hash,role,pending_otp,email_verified)
+        OUTPUT INSERTED.id
+        VALUES (@fn,@ln,@em,@pw,@r,@otp,0)
+    """, {
+        "fn": firstName,
+        "ln": lastName,
+        "em": email,
+        "pw": password_hash,
+        "r": role,
+        "otp": otp
+    }).fetchone()
+    user_id = user.id
+    id_url = await upload_to_blob(idDocument, f"id/{user_id}")
+    if role == "tenant":
+        db.execute("""
+            INSERT INTO tenants (user_id,contact_number,street,barangay,city,province,
+                id_type,id_number,id_document_url,
+                occupation_status,occupation_place,emergency_contact_name,emergency_contact_number)
+            VALUES (@uid,@c,@s,@b,@ci,@p,@it,@in,@url,@os,@op,@ecn,@ecn2)
+        """, {
+            "uid": user_id,
+            "c": contactNumber,
+            "s": street,
+            "b": barangay,
+            "ci": city,
+            "p": province,
+            "it": idType,
+            "in": idNumber,
+            "url": id_url,
+            "os": occupationStatus,
+            "op": occupationPlace,
+            "ecn": emergencyContactName,
+            "ecn2": emergencyContactNumber,
+        })
+    if role == "owner":
+        db.execute("""
+            INSERT INTO property_owners (user_id,contact_number,street,barangay,city,province,
+                id_type,id_number,id_document_url,
+                bank_associated,bank_account_number)
+            VALUES (@uid,@c,@s,@b,@ci,@p,@it,@in,@url,@bank,@acct)
+        """, {
+            "uid": user_id,
+            "c": contactNumber,
+            "s": street,
+            "b": barangay,
+            "ci": city,
+            "p": province,
+            "it": idType,
+            "in": idNumber,
+            "url": id_url,
+            "bank": bankAssociated,
+            "acct": bankAccountNumber,
+        })
+    db.commit()
+    send_otp_email(email, otp)
+    return {"success": True}
+    
+@router.post("/api/verifyemail")
+def verify_email(data: dict):
+    db = get_db()
+    email = data["email"]
+    code = data["confirmationCode"]
+    user = db.execute(
+        "SELECT id,pending_otp FROM users WHERE email=@e",
+        {"e": email}
+    ).fetchone()
+    if not user or user.pending_otp != code:
+        return {"success": False, "error": "Invalid code"}
+    db.execute("""
+        UPDATE users SET email_verified=1, pending_otp=NULL
+        WHERE id=@id
+    """, {"id": user.id})
+    db.commit()
+    return {"success": True}
+    
 @router.post("/api/property-owners")
 async def create_property_owner(
     lastName: str = Form(...),
