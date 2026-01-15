@@ -695,15 +695,23 @@ async def register(
         "otp": otp
     }).fetchone()
     user_id = user.id
-    id_url = await upload_to_blob(idDocument, f"id/{user_id}")
+    # id_url = await upload_to_blob(idDocument, f"id/{user_id}")
+    try:
+        id_url = await upload_to_blob(idDocument, f"id/{user.id}")
+    except Exception as e:
+        print("Azure Blob upload error:", str(e))
+        raise HTTPException(500, "Failed to upload ID document")
     if role == "tenant":
         db.execute("""
-            INSERT INTO tenants (user_id,contact_number,street,barangay,city,province,
+            INSERT INTO tenants (user_id,first_name,last_name,email,contact_number,street,barangay,city,province,
                 id_type,id_number,id_document_url,
                 occupation_status,occupation_place,emergency_contact_name,emergency_contact_number)
-            VALUES (@uid,@c,@s,@b,@ci,@p,@it,@in,@url,@os,@op,@ecn,@ecn2)
+            VALUES (@uid,@fn,@ln,@em,@c,@s,@b,@ci,@p,@it,@in,@url,@os,@op,@ecn,@ecn2)
         """, {
             "uid": user_id,
+            "fn": firstName,
+            "ln": lastName,
+            "em": email,
             "c": contactNumber,
             "s": street,
             "b": barangay,
@@ -719,12 +727,15 @@ async def register(
         })
     if role == "owner":
         db.execute("""
-            INSERT INTO property_owners (user_id,contact_number,street,barangay,city,province,
+            INSERT INTO property_owners (user_id,last_name,first_name,email,contact_number,street,barangay,city,province,
                 id_type,id_number,id_document_url,
                 bank_associated,bank_account_number)
-            VALUES (@uid,@c,@s,@b,@ci,@p,@it,@in,@url,@bank,@acct)
+            VALUES (@uid,@ln,@fn,@em,@c,@s,@b,@ci,@p,@it,@in,@url,@bank,@acct)
         """, {
             "uid": user_id,
+            "ln": lastName,
+            "fn": firstName,
+            "em": email,
             "c": contactNumber,
             "s": street,
             "b": barangay,
@@ -737,7 +748,11 @@ async def register(
             "acct": bankAccountNumber,
         })
     db.commit()
-    send_otp_email(email, otp)
+    try:
+        send_otp_email(email, otp)
+    except Exception as e:
+        print("EMAIL ERROR:", str(e))
+        raise HTTPException(500, "OTP email failed")
     return {"success": True}
 
 @router.post("/api/verifyemail")
