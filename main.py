@@ -1598,17 +1598,17 @@ async def submit_maintenance_request(
         print("❌ Maintenance request error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to submit maintenance request")
     
-@app.get("/api/announcements")
-async def get_announcements():
-    conn = get_db()
-    cursor = conn.cursor(as_dict=True)
-    cursor.execute("""
-        SELECT id, title, description, file_url, created_at
-        FROM post_announcements
-        ORDER BY created_at DESC
-    """)
-    rows = cursor.fetchall()
-    return rows
+# @app.get("/api/announcements")
+# async def get_announcements():
+#     conn = get_db()
+#     cursor = conn.cursor(as_dict=True)
+#     cursor.execute("""
+#         SELECT id, title, description, file_url, created_at
+#         FROM post_announcements
+#         ORDER BY created_at DESC
+#     """)
+#     rows = cursor.fetchall()
+#     return {"announcements": rows}
     
 app.include_router(router)
 
@@ -1621,7 +1621,7 @@ async def not_found_middleware(request: Request, call_next):
             return JSONResponse(status_code=404, content={"error": "Route not found"})
         return response
     except Exception:
-        return JSONResponse(status_code=500, content={"error": "Internal server error"})
+        return JSONResponse(status_code=500, content={"error": "Internal server error, Please try again."})
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
