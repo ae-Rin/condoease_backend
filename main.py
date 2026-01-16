@@ -679,90 +679,56 @@ async def register(
     db = get_db()
     cursor = db.cursor(as_dict=True)
     cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
-    existing_user = cursor.fetchone()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already has an account")
-    # existing = db.execute("SELECT id FROM users WHERE email=@e", {"e": email}).fetchone()
-    # if existing:
-    #     raise HTTPException(400, "Email already registered")
+    if cursor.fetchone():
+        raise HTTPException(400, "Email already registered")
     password_hash = pwd_context.hash(password)
     otp = str(random.randint(100000, 999999))
-    user = db.execute("""
-        INSERT INTO users (first_name,last_name,email,password_hash,role,pending_otp,email_verified)
-        OUTPUT INSERTED.id
-        VALUES (@fn,@ln,@em,@pw,@r,@otp,0)
-    """, {
-        "fn": firstName,
-        "ln": lastName,
-        "em": email,
-        "pw": password_hash,
-        "r": role,
-        "otp": otp
-    }).fetchone()
-    user_id = user.id
-    # id_url = await upload_to_blob(idDocument, f"id/{user_id}")
-    try:
-        # id_url = await upload_to_blob(idDocument, f"id/{user.id}")
-        id_url = upload_to_blob(
-            idDocument,
-            "tenantiddocuments",
-            f"{user_id}"
+    cursor.execute("""
+        INSERT INTO users (
+            first_name, last_name, email, password, role,
+            pending_otp, email_verified, created_at
         )
-    except Exception as e:
-        print("Azure Blob upload error:", str(e))
-        raise HTTPException(500, "Failed to upload ID document")
-    if role == "tenant":
-        db.execute("""
-            INSERT INTO tenants (user_id,first_name,last_name,email,contact_number,street,barangay,city,province,
-                id_type,id_number,id_document_url,
-                occupation_status,occupation_place,emergency_contact_name,emergency_contact_number)
-            VALUES (@uid,@fn,@ln,@em,@c,@s,@b,@ci,@p,@it,@in,@url,@os,@op,@ecn,@ecn2)
-        """, {
-            "uid": user_id,
-            "fn": firstName,
-            "ln": lastName,
-            "em": email,
-            "c": contactNumber,
-            "s": street,
-            "b": barangay,
-            "ci": city,
-            "p": province,
-            "it": idType,
-            "in": idNumber,
-            "url": id_url,
-            "os": occupationStatus,
-            "op": occupationPlace,
-            "ecn": emergencyContactName,
-            "ecn2": emergencyContactNumber,
-        })
-    if role == "owner":
-        db.execute("""
-            INSERT INTO property_owners (user_id,last_name,first_name,email,contact_number,street,barangay,city,province,
-                id_type,id_number,id_document_url,
-                bank_associated,bank_account_number)
-            VALUES (@uid,@ln,@fn,@em,@c,@s,@b,@ci,@p,@it,@in,@url,@bank,@acct)
-        """, {
-            "uid": user_id,
-            "ln": lastName,
-            "fn": firstName,
-            "em": email,
-            "c": contactNumber,
-            "s": street,
-            "b": barangay,
-            "ci": city,
-            "p": province,
-            "it": idType,
-            "in": idNumber,
-            "url": id_url,
-            "bank": bankAssociated,
-            "acct": bankAccountNumber,
-        })
+        VALUES (%s,%s,%s,%s,%s,%s,0,GETDATE())
+    """, (firstName, lastName, email, password_hash, role, otp))
     db.commit()
-    try:
-        send_otp_email(email, otp)
-    except Exception as e:
-        print("EMAIL ERROR:", str(e))
-        raise HTTPException(500, "OTP email failed")
+    cursor.execute("SELECT @@IDENTITY AS id")
+    user_id = cursor.fetchone()["id"]
+    container = "tenantiddocuments" if role == "tenant" else "owneriddocuments"
+    id_url = upload_to_blob(idDocument, container, f"{user_id}")
+    if role == "tenant":
+        cursor.execute("""
+            INSERT INTO tenants (
+                user_id, first_name, last_name, email, contact_number,
+                street, barangay, city, province,
+                id_type, id_number, id_document_url,
+                occupation_status, occupation_place,
+                emergency_contact_name, emergency_contact_number
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            user_id, firstName, lastName, email, contactNumber,
+            street, barangay, city, province,
+            idType, idNumber, id_url,
+            occupationStatus, occupationPlace,
+            emergencyContactName, emergencyContactNumber
+        ))
+    if role == "owner":
+        cursor.execute("""
+            INSERT INTO property_owners (
+                user_id, last_name, first_name, email, contact_number,
+                street, barangay, city, province,
+                id_type, id_number, id_document_url,
+                bank_associated, bank_account_number
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            user_id, lastName, firstName, email, contactNumber,
+            street, barangay, city, province,
+            idType, idNumber, id_url,
+            bankAssociated, bankAccountNumber
+        ))
+    db.commit()
+    send_otp_email(email, otp)
     return {"success": True}
 
 @router.post("/api/verifyemail")
@@ -1562,7 +1528,6 @@ async def submit_maintenance_request(
     tenant_id = token.get("id")
     db = get_db()
     cursor = db.cursor()
-
     try:
         scheduled_dt = None
         if scheduled_at:
@@ -1598,17 +1563,17 @@ async def submit_maintenance_request(
         print("❌ Maintenance request error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to submit maintenance request")
     
-# @app.get("/api/announcements")
-# async def get_announcements():
-#     conn = get_db()
-#     cursor = conn.cursor(as_dict=True)
-#     cursor.execute("""
-#         SELECT id, title, description, file_url, created_at
-#         FROM post_announcements
-#         ORDER BY created_at DESC
-#     """)
-#     rows = cursor.fetchall()
-#     return {"announcements": rows}
+@app.get("/api/announcements")
+async def get_announcements():
+    conn = get_db()
+    cursor = conn.cursor(as_dict=True)
+    cursor.execute("""
+        SELECT id, title, description, file_url, created_at
+        FROM post_announcements
+        ORDER BY created_at DESC
+    """)
+    rows = cursor.fetchall()
+    return {"announcements": rows}
     
 app.include_router(router)
 
