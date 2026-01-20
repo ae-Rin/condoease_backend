@@ -656,8 +656,8 @@ async def delete_tenant(tenant_id: int, token: dict = Depends(verify_token)):
     
 @router.post("/api/register")
 async def register(
-    firstName: str = Form(...),
     lastName: str = Form(...),
+    firstName: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
     role: str = Form(...),
@@ -668,7 +668,7 @@ async def register(
     province: str = Form(...),
     idType: str = Form(...),
     idNumber: str = Form(...),
-    idDocument: UploadFile = File(...),
+    idDocument: UploadFile = File(None),
     occupationStatus: str = Form(None),
     occupationPlace: str = Form(None),
     emergencyContactName: str = Form(None),
@@ -685,8 +685,8 @@ async def register(
     otp = str(random.randint(100000, 999999))
     cursor.execute("""
         INSERT INTO users (
-            first_name, last_name, email, password, role,
-            pending_otp, email_verified, created_at
+            first_name, last_name, email, password, role, created_at,
+            pending_otp, email_verified
         )
         VALUES (%s,%s,%s,%s,%s,%s,0,GETDATE())
     """, (firstName, lastName, email, password_hash, role, otp))
@@ -694,19 +694,23 @@ async def register(
     cursor.execute("SELECT @@IDENTITY AS id")
     user_id = cursor.fetchone()["id"]
     container = "tenantiddocuments" if role == "tenant" else "owneriddocuments"
-    id_url = upload_to_blob(idDocument, container, f"{user_id}")
+    # id_url = upload_to_blob(idDocument, container, f"{user_id}")
+    id_url = None
+    if idDocument:
+        container = "tenantiddocuments" if role == "tenant" else "owneriddocuments"
+        id_url = upload_to_blob(idDocument, container, f"{user_id}")
     if role == "tenant":
         cursor.execute("""
             INSERT INTO tenants (
-                user_id, first_name, last_name, email, contact_number,
+                user_id, last_name, first_name, email, contact_number,
                 street, barangay, city, province,
                 id_type, id_number, id_document_url,
                 occupation_status, occupation_place,
-                emergency_contact_name, emergency_contact_number
-            )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                emergency_contact_name, emergency_contact_number,
+                created_at, updated_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, GETDATE(), GETDATE())
         """, (
-            user_id, firstName, lastName, email, contactNumber,
+            user_id, lastName, firstName, email, contactNumber,
             street, barangay, city, province,
             idType, idNumber, id_url,
             occupationStatus, occupationPlace,
@@ -718,9 +722,11 @@ async def register(
                 user_id, last_name, first_name, email, contact_number,
                 street, barangay, city, province,
                 id_type, id_number, id_document_url,
-                bank_associated, bank_account_number
+                bank_associated, bank_account_number,
+                created_at, updated_at
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, GETDATE(), GETDATE())
         """, (
             user_id, lastName, firstName, email, contactNumber,
             street, barangay, city, province,
@@ -729,7 +735,10 @@ async def register(
         ))
     db.commit()
     send_otp_email(email, otp)
-    return {"success": True}
+    return {
+        "success": True,
+        "message": "Registration successful. Please verify your email."
+    }
 
 @router.post("/api/verifyemail")
 def verify_email(data: dict):
