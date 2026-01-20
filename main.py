@@ -1,4 +1,4 @@
-from random import random
+import random
 import shutil
 import time
 import os       
@@ -655,7 +655,7 @@ async def delete_tenant(tenant_id: int, token: dict = Depends(verify_token)):
         raise HTTPException(500, f"Delete failed: {e}")
     
 @router.post("/api/register")
-async def register(
+async def register_user(
     lastName: str = Form(...),
     firstName: str = Form(...),
     email: str = Form(...),
@@ -683,18 +683,22 @@ async def register(
         raise HTTPException(400, "Email already registered")
     password_hash = pwd_context.hash(password)
     otp = str(random.randint(100000, 999999))
+    otp_expiry = datetime.utcnow() + timedelta(minutes=10)
     cursor.execute("""
         INSERT INTO users (
-            first_name, last_name, email, password, role, created_at,
-            pending_otp, email_verified
+            first_name,last_name,email,password,role,
+            pending_otp,otp_expires_at,email_verified,
+            created_at
         )
-        VALUES (%s,%s,%s,%s,%s,%s,0,GETDATE())
-    """, (firstName, lastName, email, password_hash, role, otp))
+        VALUES (%s,%s,%s,%s,%s,%s,%s,0,GETDATE())
+    """, (
+        firstName,lastName,email,password_hash,
+        role,otp,otp_expiry,
+    ))
     db.commit()
     cursor.execute("SELECT @@IDENTITY AS id")
     user_id = cursor.fetchone()["id"]
     container = "tenantiddocuments" if role == "tenant" else "owneriddocuments"
-    # id_url = upload_to_blob(idDocument, container, f"{user_id}")
     id_url = None
     if idDocument:
         container = "tenantiddocuments" if role == "tenant" else "owneriddocuments"
@@ -740,23 +744,53 @@ async def register(
         "message": "Registration successful. Please verify your email."
     }
 
-@router.post("/api/verifyemail")
-def verify_email(data: dict):
+@router.post("/api/verify-email")
+def verify_email(email: str = Form(...), otp: str = Form(...)):
     db = get_db()
-    email = data["email"]
-    code = data["confirmationCode"]
-    user = db.execute(
-        "SELECT id,pending_otp FROM users WHERE email=@e",
-        {"e": email}
-    ).fetchone()
-    if not user or user.pending_otp != code:
-        return {"success": False, "error": "Invalid code"}
-    db.execute("""
-        UPDATE users SET email_verified=1, pending_otp=NULL
-        WHERE id=@id
-    """, {"id": user.id})
+    cursor = db.cursor(as_dict=True)
+    cursor.execute("""
+        SELECT id, pending_otp, otp_expires_at
+        FROM users
+        WHERE email = %s AND email_verified = 0
+    """, (email,))
+    user = cursor.fetchone()
+    if not user:
+        raise HTTPException(400, "Invalid email or already verified")
+    if user["pending_otp"] != otp:
+        raise HTTPException(400, "Invalid OTP")
+    if not user["otp_expires_at"] or user["otp_expires_at"] < datetime.utcnow():
+        raise HTTPException(400, "OTP expired")
+    cursor.execute("""
+        UPDATE users
+        SET email_verified = 1,
+            pending_otp = NULL,
+            otp_expires_at = NULL
+        WHERE id = %s
+    """, (user["id"],))
     db.commit()
-    return {"success": True}
+    return {
+        "success": True,
+        "message": "Email verified successfully"
+    }
+    
+@router.post("/api/resend-otp")
+def resend_otp(email: str = Form(...)):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+    otp = str(random.randint(100000, 999999))
+    expiry = datetime.utcnow() + timedelta(minutes=10)
+    cursor.execute("""
+        UPDATE users
+        SET pending_otp = %s,
+            otp_expires_at = %s
+        WHERE email = %s AND email_verified = 0
+    """, (otp, expiry, email))
+    if cursor.rowcount == 0:
+        raise HTTPException(400, "Invalid email or already verified")
+    db.commit()
+    send_otp_email(email, otp)
+    return {"success": True, "message": "OTP resent"}
+
     
 @router.post("/api/property-owners")
 async def create_property_owner(
