@@ -175,8 +175,9 @@ def login_user(body: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not pwd_context.verify(body.password, user['password']):
         raise HTTPException(status_code=401, detail="Incorrect password")
-    if not user["email_verified"]:
-        raise HTTPException(status_code=403, detail="Email not verified")
+    # if not user["email_verified"]:
+    #     raise HTTPException(status_code=403, detail="Email not verified")
+    #hold on
     token = jwt.encode(
         {
             "id": user['id'],

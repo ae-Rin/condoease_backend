@@ -17,7 +17,7 @@ def send_otp_email(to_email: str, otp: str):
           json={
                "sender": {
                     "name": "CondoEase",
-                    "email": "noreply@condoease.me"
+                    "email": "noreply@brevo.me"
                },
                "to": [{"email": to_email}],
                "subject": "Your CondoEase Verification Code",
