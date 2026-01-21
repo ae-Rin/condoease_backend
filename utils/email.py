@@ -31,6 +31,7 @@ def send_otp_email(to_email: str, otp: str):
      )
 
      if response.status_code not in (200, 201):
+          print("BREVO RESPONSE:", response.status_code, response.text)
           raise Exception(f"Brevo error: {response.text}")
 
      return True
