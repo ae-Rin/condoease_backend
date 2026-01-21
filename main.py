@@ -56,7 +56,7 @@ def clean_row(row):
 # App instance
 app = FastAPI()
 
-# Health check  
+# Health runtime check  
 @app.get("/")
 def health_check():
     return {"status": "ok"}
@@ -833,10 +833,14 @@ async def register_user(
                 bankAssociated, bankAccountNumber
             ))
         db.commit()
-        send_otp_email(email, otp)
+        try:
+            send_otp_email(email, otp)
+        except Exception as email_error:
+            print("EMAIL ERROR:", str(email_error))
         return {
             "success": True,
-            "message": "Registration successful. Please verify your email."
+            "message": "Registration successful. Please verify your email.",
+            "redirect": "verify"
         }
     except HTTPException:
         raise
