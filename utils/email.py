@@ -5,8 +5,14 @@ import os
 BREVO_KEY = os.getenv("BREVO_API_KEY")
 
 def send_otp_email(to_email: str, otp: str):
-     if not BREVO_KEY:
-          raise Exception("BREVO_API_KEY is not set")
+     try:# your email code
+          if not BREVO_KEY:
+               raise Exception("BREVO_API_KEY is not set")
+          print("OTP SENT TO:", to_email)
+     except Exception as e:
+          print("EMAIL ERROR:", str(e))
+          raise
+     
 
      response = requests.post(
           "https://api.brevo.com/v3/smtp/email",
