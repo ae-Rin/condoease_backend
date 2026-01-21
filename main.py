@@ -56,6 +56,11 @@ def clean_row(row):
 # App instance
 app = FastAPI()
 
+# Health check  
+@app.get("/")
+def health_check():
+    return {"status": "ok"}
+
 # CORS
 origins = os.getenv("CORS_ORIGINS", "").split(",")
 app.add_middleware(
