@@ -839,9 +839,6 @@ async def register_user(
         db.rollback()
         print("REGISTER ERROR:", str(e))
         raise HTTPException(status_code=500, detail="Registration failed")
-    finally:
-        cursor.close()
-        db.close()
 
 @router.post("/api/verify-email")
 def verify_email(email: str = Form(...), otp: str = Form(...)):
