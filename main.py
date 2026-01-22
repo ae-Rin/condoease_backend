@@ -85,6 +85,9 @@ class VerifyEmailRequest(BaseModel):
     email: str
     otp: str
     
+class ResendOTPRequest(BaseModel):
+    email: str
+    
 class MaintenanceRequest(BaseModel):
     maintenance_type: str
     category: str
@@ -864,7 +867,7 @@ def verify_email(payload: VerifyEmailRequest):
     }
     
 @router.post("/api/resend-otp")
-def resend_otp(email: str = Form(...)):
+def resend_otp(payload: ResendOTPRequest):
     db = get_db()
     cursor = db.cursor(as_dict=True)
     otp = str(random.randint(100000, 999999))
@@ -874,13 +877,12 @@ def resend_otp(email: str = Form(...)):
         SET pending_otp = %s,
             otp_expires_at = %s
         WHERE email = %s AND email_verified = 0
-    """, (otp, expiry, email))
+    """, (otp, expiry, payload.email))
     if cursor.rowcount == 0:
         raise HTTPException(400, "Invalid email or already verified")
     db.commit()
-    send_otp_email(email, otp)
+    send_otp_email(payload.email, otp)
     return {"success": True, "message": "OTP resent"}
-
     
 @router.post("/api/property-owners")
 async def create_property_owner(
