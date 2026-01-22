@@ -77,15 +77,13 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Auth Schemas
-# class RegisterRequest(BaseModel):
-#     firstName: str
-#     lastName: str
-#     email: str
-#     password: str
-
 class LoginRequest(BaseModel):
     email: str
     password: str
+    
+class VerifyEmailRequest(BaseModel):
+    email: str
+    otp: str
     
 class MaintenanceRequest(BaseModel):
     maintenance_type: str
@@ -148,22 +146,6 @@ def verify_token(request: Request):
         return payload
     except JWTError:
         raise HTTPException(status_code=403, detail="Invalid token")
-
-# @app.post("/api/registerstep2")
-# def register_user(body: RegisterRequest):
-#     db = get_db()
-#     cursor = db.cursor()
-#     hashed = pwd_context.hash(body.password)
-#     try:
-#         cursor.execute("""
-#             INSERT INTO users (first_name, last_name, email, password, role)
-#             VALUES (%s, %s, %s, %s, %s)
-#         """, (body.firstName, body.lastName, body.email, hashed, "tenant"))
-#         db.commit()
-#         return {"success": True}
-#     except Exception as e:
-#         print("Registration error:", e)
-#         raise HTTPException(status_code=500, detail="Registration failed")
 
 @app.post("/api/login")
 def login_user(body: LoginRequest):
@@ -853,18 +835,18 @@ async def register_user(
         raise HTTPException(status_code=500, detail="Registration failed")
 
 @router.post("/api/verify-email")
-def verify_email(email: str = Form(...), otp: str = Form(...)):
+def verify_email(payload: VerifyEmailRequest):
     db = get_db()
     cursor = db.cursor(as_dict=True)
     cursor.execute("""
         SELECT id, pending_otp, otp_expires_at
         FROM users
         WHERE email = %s AND email_verified = 0
-    """, (email,))
+    """, (payload.email,))
     user = cursor.fetchone()
     if not user:
         raise HTTPException(400, "Invalid email or already verified")
-    if user["pending_otp"] != otp:
+    if user["pending_otp"] != payload.otp:
         raise HTTPException(400, "Invalid OTP")
     if not user["otp_expires_at"] or user["otp_expires_at"] < datetime.utcnow():
         raise HTTPException(400, "OTP expired")
