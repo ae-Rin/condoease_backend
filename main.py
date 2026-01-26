@@ -1465,28 +1465,27 @@ def get_tenant_by_id(tenant_id: int, token: dict = Depends(verify_token)):
                 t.emergency_contact_name,
                 t.emergency_contact_number,
                 t.created_at,
-                t.updated_at
+                t.updated_at,
+                t.status
             FROM tenants t
             WHERE t.tenant_id = %s
         """, (tenant_id,))
         result = cursor.fetchone()
         if not result:
             raise HTTPException(status_code=404, detail="Tenant not found")
-        cursor.execute("""
-            SELECT
-            id as id_document_url,
-            file_url,
-            file_type,
-            uploaded_at
-            FROM tenant_id_document_url
-            WHERE tenant_id = %s
-        """, (tenant_id,))
-        documents = cursor.fetchall()   
-        result["id_documents"] = documents
+        result["id_documents"] = (
+            [{
+                "file_url": result["id_document_url"],
+                "file_type": result["id_type"],
+                "uploaded_at": result["created_at"]
+            }]
+            if result["id_document_url"]
+            else []
+        )
         return result
     except Exception as e:
-        print("Error fetching request by ID:", str(e))
-        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+        print("Error fetching tenant by ID:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
     
 # @app.get("/api/tenants/{tenant_id}")
 # def get_tenant_by_id(tenant_id: int, token: dict = Depends(verify_token)):
