@@ -1441,7 +1441,7 @@ def get_all_tenants(token: dict = Depends(verify_token)):
         print("❌ /api/tenants error:", str(e))
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
     
-@app.get("/api/tenants/{tenant_id}")
+@app.get("/api/tenantdetails/{tenant_id}")
 def get_tenant_by_id(tenant_id: int, token: dict = Depends(verify_token)):
     db = get_db()
     cursor = db.cursor(as_dict=True)
