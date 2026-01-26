@@ -1438,7 +1438,7 @@ def get_all_tenants(token: dict = Depends(verify_token)):
         cursor.execute("SELECT * FROM tenants")
         return cursor.fetchall()
     except Exception as e:
-        print("❌ /api/tenants error:", str(e))
+        print("/api/tenants error:", str(e))
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
     
 @app.get("/api/tenantdetails/{tenant_id}")
