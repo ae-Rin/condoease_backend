@@ -1525,10 +1525,8 @@ def get_owner_by_id(owner_id: int, token: dict = Depends(verify_token)):
                 po.id_type, 
                 po.id_number,
                 po.id_document_url,
-                po.occupation_status,
-                po.occupation_place,
-                po.emergency_contact_name,
-                po.emergency_contact_number,
+                po.bank_associated,
+                po.bank_account_number,
                 po.created_at,
                 po.updated_at,
                 po.status
