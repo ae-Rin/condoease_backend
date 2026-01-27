@@ -163,22 +163,30 @@ def login_user(body: LoginRequest):
     # if not user["email_verified"]:
     #     raise HTTPException(status_code=403, detail="Email not verified")
     #hold on
+    if user["role"] == "tenant" and not user["is_active"]:
+        raise HTTPException(
+            403,
+            "Your account is pending admin approval"
+        )
     token = jwt.encode(
         {
-            "id": user['id'],
-            "role": user['role'],
-            "exp": datetime.utcnow() + timedelta(hours=12)
+            "id": user["id"],
+            "role": user["role"],
+            "exp": datetime.utcnow() + timedelta(hours=12),
         },
         SECRET_KEY,
-        algorithm=ALGORITHM
+        algorithm=ALGORITHM,
     )
-    return {"token": token, "user": {
-        "id": user['id'],
-        "email": user['email'],
-        "first_name": user['first_name'],
-        "last_name": user['last_name'],
-        "role": user['role']
-    }}
+    return {
+        "token": token,
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "first_name": user["first_name"],
+            "last_name": user["last_name"],
+            "role": user["role"],
+        },
+    }
 
 @app.put("/api/users/avatar")
 def update_avatar(avatar: UploadFile = File(...), token: dict = Depends(verify_token)):
@@ -626,6 +634,48 @@ async def update_tenant(
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Update failed: {e}")
+    
+@router.put("/api/tenants/{tenant_id}/status")
+async def update_tenant_status(
+    tenant_id: int,
+    status: str = Form(...),
+    comment: str = Form(None),
+    token: dict = Depends(verify_token)
+):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+    cursor.execute("""
+        SELECT t.*, u.id AS user_id
+        FROM tenants t
+        JOIN users u ON u.id = t.user_id
+        WHERE t.tenant_id = %s
+    """, (tenant_id,))
+    tenant = cursor.fetchone()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    if status not in ["approved", "denied"]:
+        raise HTTPException(400, "Invalid status")
+    try:
+        cursor.execute("""
+            UPDATE tenants
+            SET status = %s,
+                admin_comment = %s,
+                updated_at = GETDATE()
+            WHERE tenant_id = %s
+        """, (status, comment, tenant_id))
+        cursor.execute("""
+            UPDATE users
+            SET is_active = %s
+            WHERE id = %s
+        """, (
+            1 if status == "approved" else 0,
+            tenant["user_id"]
+        ))
+        db.commit()
+        return {"message": f"Tenant {status} successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
     
 @router.delete("/api/tenants/{tenant_id}")
 async def delete_tenant(tenant_id: int, token: dict = Depends(verify_token)):
