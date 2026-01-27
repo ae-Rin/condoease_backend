@@ -99,6 +99,10 @@ class MaintenanceDecision(BaseModel):
     comment: Optional[str] = None
     scheduled_at: Optional[datetime] = None
     
+class TenantStatusUpdate(BaseModel):
+    status: str
+    comment: Optional[str] = None
+    
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
@@ -638,8 +642,7 @@ async def update_tenant(
 @router.put("/api/tenants/{tenant_id}/status")
 async def update_tenant_status(
     tenant_id: int,
-    status: str = Form(...),
-    comment: str = Form(None),
+    body: TenantStatusUpdate,
     token: dict = Depends(verify_token)
 ):
     db = get_db()
@@ -653,7 +656,7 @@ async def update_tenant_status(
     tenant = cursor.fetchone()
     if not tenant:
         raise HTTPException(404, "Tenant not found")
-    if status not in ["approved", "denied"]:
+    if body.status not in ["approved", "denied"]:
         raise HTTPException(400, "Invalid status")
     try:
         cursor.execute("""
@@ -662,17 +665,18 @@ async def update_tenant_status(
                 admin_comment = %s,
                 updated_at = GETDATE()
             WHERE tenant_id = %s
-        """, (status, comment, tenant_id))
+        """, (body.status, body.comment, tenant_id))
+
         cursor.execute("""
             UPDATE users
             SET is_active = %s
             WHERE id = %s
         """, (
-            1 if status == "approved" else 0,
+            1 if body.status == "approved" else 0,
             tenant["user_id"]
         ))
         db.commit()
-        return {"message": f"Tenant {status} successfully"}
+        return {"message": f"Tenant {body.status} successfully"}
     except Exception as e:
         db.rollback()
         raise HTTPException(500, str(e))
@@ -697,95 +701,6 @@ async def delete_tenant(tenant_id: int, token: dict = Depends(verify_token)):
         db.rollback()
         raise HTTPException(500, f"Delete failed: {e}")
     
-# @router.post("/api/register")
-# async def register_user(
-#     lastName: str = Form(...),
-#     firstName: str = Form(...),
-#     email: str = Form(...),
-#     password: str = Form(...),
-#     role: str = Form(...),
-#     contactNumber: str = Form(...),
-#     street: str = Form(...),
-#     barangay: str = Form(...),
-#     city: str = Form(...),
-#     province: str = Form(...),
-#     idType: str = Form(...),
-#     idNumber: str = Form(...),
-#     idDocument: UploadFile = File(None),
-#     occupationStatus: str = Form(None),
-#     occupationPlace: str = Form(None),
-#     emergencyContactName: str = Form(None),
-#     emergencyContactNumber: str = Form(None),
-#     bankAssociated: str = Form(None),
-#     bankAccountNumber: str = Form(None),
-# ):
-#     db = get_db()
-#     cursor = db.cursor(as_dict=True)
-#     cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
-#     if cursor.fetchone():
-#         raise HTTPException(400, "Email already registered")
-#     password_hash = pwd_context.hash(password)
-#     otp = str(random.randint(100000, 999999))
-#     otp_expiry = datetime.utcnow() + timedelta(minutes=10)
-#     cursor.execute("""
-#         INSERT INTO users (
-#             first_name,last_name,email,password,role,
-#             pending_otp,otp_expires_at,email_verified,
-#             created_at
-#         )
-#         VALUES (%s,%s,%s,%s,%s,%s,%s,0,GETDATE())
-#     """, (
-#         firstName,lastName,email,password_hash,
-#         role,otp,otp_expiry,
-#     ))
-#     db.commit()
-#     cursor.execute("SELECT @@IDENTITY AS id")
-#     user_id = cursor.fetchone()["id"]
-#     container = "tenantiddocuments" if role == "tenant" else "owneriddocuments"
-#     id_url = None
-#     if idDocument:
-#         container = "tenantiddocuments" if role == "tenant" else "owneriddocuments"
-#         id_url = upload_to_blob(idDocument, container, f"{user_id}")
-#     if role == "tenant":
-#         cursor.execute("""
-#             INSERT INTO tenants (
-#                 user_id, last_name, first_name, email, contact_number,
-#                 street, barangay, city, province,
-#                 id_type, id_number, id_document_url,
-#                 occupation_status, occupation_place,
-#                 emergency_contact_name, emergency_contact_number,
-#                 created_at, updated_at
-#             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, GETDATE(), GETDATE())
-#         """, (
-#             user_id, lastName, firstName, email, contactNumber,
-#             street, barangay, city, province,
-#             idType, idNumber, id_url,
-#             occupationStatus, occupationPlace,
-#             emergencyContactName, emergencyContactNumber
-#         ))
-#     if role == "owner":
-#         cursor.execute("""
-#             INSERT INTO property_owners (
-#                 user_id, last_name, first_name, email, contact_number,
-#                 street, barangay, city, province,
-#                 id_type, id_number, id_document_url,
-#                 bank_associated, bank_account_number,
-#                 created_at, updated_at
-#             )
-#             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,
-#                     %s, %s, %s, %s, %s, GETDATE(), GETDATE())
-#         """, (
-#             user_id, lastName, firstName, email, contactNumber,
-#             street, barangay, city, province,
-#             idType, idNumber, id_url,
-#             bankAssociated, bankAccountNumber
-#         ))
-#     db.commit()
-#     send_otp_email(email, otp)
-#     return {
-#         "success": True,
-#         "message": "Registration successful. Please verify your email."
-#     }
 @router.post("/api/register")
 async def register_user(
     lastName: str = Form(...),
