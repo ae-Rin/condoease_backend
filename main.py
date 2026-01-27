@@ -167,10 +167,15 @@ def login_user(body: LoginRequest):
     # if not user["email_verified"]:
     #     raise HTTPException(status_code=403, detail="Email not verified")
     #hold on
-    if user["role"] == "tenant" and not user["is_active"]:
+    # if user["role"] == "tenant" and not user["is_active"]:
+    #     raise HTTPException(
+    #         403,
+    #         "Your account is pending admin approval"
+    #     )
+    if user["role"] in ["owner", "agent", "tenant"] and not user["is_active"]:
         raise HTTPException(
             403,
-            "Your account is pending admin approval"
+            "Your account is pending admin approval."
         )
     token = jwt.encode(
         {
@@ -658,6 +663,8 @@ async def update_tenant_status(
         raise HTTPException(404, "Tenant not found")
     if body.status not in ["approved", "denied"]:
         raise HTTPException(400, "Invalid status")
+    if body.status == "denied" and not body.comment:
+        raise HTTPException(400, "Comment is required when denying a tenant")
     try:
         cursor.execute("""
             UPDATE tenants
