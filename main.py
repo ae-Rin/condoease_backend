@@ -1458,41 +1458,6 @@ def get_tenant_by_id(tenant_id: int, token: dict = Depends(verify_token)):
     except Exception as e:
         print("Error fetching tenant by ID:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
-    
-# @app.get("/api/tenants/{tenant_id}")
-# def get_tenant_by_id(tenant_id: int, token: dict = Depends(verify_token)):
-#     db = get_db()
-#     cursor = db.cursor(as_dict=True)
-#     try:
-#         cursor.execute("""
-#             SELECT
-#                 t.tenant_id,
-#                 t.last_name, 
-#                 t.first_name, 
-#                 t.email, 
-#                 t.contact_number,
-#                 t.street, 
-#                 t.barangay, 
-#                 t.city, 
-#                 t.province,
-#                 t.id_type, 
-#                 t.id_number,
-#                 t.id_document,
-#                 t.occupation_status,
-#                 t.occupation_place,
-#                 t.emergency_contact_name,
-#                 t.emergency_contact_number,
-#                 t.created_at,
-#                 t.updated_at
-#             FROM tenants t
-#             WHERE t.tenant_id = %s
-#         """, (tenant_id,))
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail="Database error: " + str(e))
-#     tenant = cursor.fetchone()
-#     if not tenant:
-#         raise HTTPException(status_code=404, detail="Tenant not found")
-#     return tenant
 
 @app.get("/api/property-owners")
 def get_all_property_owners(token: dict = Depends(verify_token)):
@@ -1500,6 +1465,52 @@ def get_all_property_owners(token: dict = Depends(verify_token)):
     cursor = db.cursor(as_dict=True)
     cursor.execute("SELECT * FROM property_owners")
     return cursor.fetchall()
+
+@app.get("/api/ownerdetails/{owner_id}")
+def get_owner_by_id(owner_id: int, token: dict = Depends(verify_token)):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+    try:
+        cursor.execute("""
+            SELECT
+                po.owner_id,
+                po.last_name, 
+                po.first_name, 
+                po.email, 
+                po.contact_number,
+                po.street, 
+                po.barangay, 
+                po.city, 
+                po.province,
+                po.id_type, 
+                po.id_number,
+                po.id_document_url,
+                po.occupation_status,
+                po.occupation_place,
+                po.emergency_contact_name,
+                po.emergency_contact_number,
+                po.created_at,
+                po.updated_at,
+                po.status
+            FROM property_owners po
+            WHERE po.owner_id = %s
+        """, (owner_id,))
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="Owner not found")
+        result["id_documents"] = (
+            [{
+                "file_url": result["id_document_url"],
+                "file_type": result["id_type"],
+                "uploaded_at": result["created_at"]
+            }]
+            if result["id_document_url"]
+            else []
+        )
+        return result
+    except Exception as e:
+        print("Error fetching owner by ID:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/properties")
 def get_all_properties(token: dict = Depends(verify_token)):
