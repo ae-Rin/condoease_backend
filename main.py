@@ -1478,7 +1478,8 @@ def get_tenant_by_id(tenant_id: int, token: dict = Depends(verify_token)):
                 t.emergency_contact_number,
                 t.created_at,
                 t.updated_at,
-                t.status
+                t.status,
+                t.admin_comment
             FROM tenants t
             WHERE t.tenant_id = %s
         """, (tenant_id,))
@@ -1529,7 +1530,8 @@ def get_owner_by_id(owner_id: int, token: dict = Depends(verify_token)):
                 po.bank_account_number,
                 po.created_at,
                 po.updated_at,
-                po.status
+                po.status,
+                po.admin_comment
             FROM property_owners po
             WHERE po.owner_id = %s
         """, (owner_id,))
