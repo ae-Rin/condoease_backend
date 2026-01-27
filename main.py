@@ -103,6 +103,10 @@ class TenantStatusUpdate(BaseModel):
     status: str
     comment: Optional[str] = None
     
+class OwnerStatusUpdate(BaseModel):
+    status: str
+    comment: Optional[str] = None
+    
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
@@ -164,14 +168,13 @@ def login_user(body: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not pwd_context.verify(body.password, user['password']):
         raise HTTPException(status_code=401, detail="Incorrect password")
-    # if not user["email_verified"]:
-    #     raise HTTPException(status_code=403, detail="Email not verified")
-    #hold on
-    # if user["role"] == "tenant" and not user["is_active"]:
-    #     raise HTTPException(
-    #         403,
-    #         "Your account is pending admin approval"
-    #     )
+    if not user["email_verified"]:
+        raise HTTPException(status_code=403, detail="Email not verified")
+    if user["role"] == "tenant" and not user["is_active"]:
+        raise HTTPException(
+            403,
+            "Your account is pending admin approval"
+        )
     if user["role"] in ["owner", "agent", "tenant"] and not user["is_active"]:
         raise HTTPException(
             403,
@@ -673,7 +676,6 @@ async def update_tenant_status(
                 updated_at = GETDATE()
             WHERE tenant_id = %s
         """, (body.status, body.comment, tenant_id))
-
         cursor.execute("""
             UPDATE users
             SET is_active = %s
@@ -684,6 +686,49 @@ async def update_tenant_status(
         ))
         db.commit()
         return {"message": f"Tenant {body.status} successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
+    
+@router.put("/api/owners/{owner_id}/status")
+async def update_owner_status(
+    owner_id: int,
+    body: OwnerStatusUpdate,
+    token: dict = Depends(verify_token)
+):
+    db = get_db()
+    cursor = db.cursor(as_dict=True)
+    cursor.execute("""
+        SELECT po.*, u.id AS user_id
+        FROM property_owners po
+        JOIN users u ON u.id = po.user_id
+        WHERE po.owner_id = %s
+    """, (owner_id,))
+    owner = cursor.fetchone()
+    if not owner:
+        raise HTTPException(404, "Owner not found")
+    if body.status not in ["approved", "denied"]:
+        raise HTTPException(400, "Invalid status")
+    if body.status == "denied" and not body.comment:
+        raise HTTPException(400, "Comment is required when denying an owner")
+    try:
+        cursor.execute("""
+            UPDATE property_owners
+            SET status = %s,
+                admin_comment = %s,
+                updated_at = GETDATE()
+            WHERE owner_id = %s
+        """, (body.status, body.comment, owner_id))
+        cursor.execute("""
+            UPDATE users
+            SET is_active = %s
+            WHERE id = %s
+        """, (
+            1 if body.status == "approved" else 0,
+            owner["user_id"]
+        ))
+        db.commit()
+        return {"message": f"Owner {body.status} successfully"}
     except Exception as e:
         db.rollback()
         raise HTTPException(500, str(e))
