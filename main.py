@@ -170,11 +170,11 @@ def login_user(body: LoginRequest):
         raise HTTPException(status_code=401, detail="Incorrect password")
     if not user["email_verified"]:
         raise HTTPException(status_code=403, detail="Email not verified")
-    if user["role"] == "tenant" and not user["is_active"]:
-        raise HTTPException(
-            403,
-            "Your account is pending admin approval"
-        )
+    # if user["role"] == "tenant" and not user["is_active"]:
+    #     raise HTTPException(
+    #         403,
+    #         "Your account is pending admin approval"
+    #     )
     if user["role"] in ["owner", "agent", "tenant"] and not user["is_active"]:
         raise HTTPException(
             403,
