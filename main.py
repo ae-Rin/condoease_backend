@@ -436,7 +436,7 @@ async def create_announcement(
         return new_post
     except Exception as e:
         print("Announcement insert error:", str(e))
-        raise HTTPException(status_code=500, detail="Failed to post announcement")
+        raise HTTPException(status_code=500, detail="Failed to post announcements")
 
 @app.put("/api/announcements/{announcement_id}")
 async def update_announcement(
