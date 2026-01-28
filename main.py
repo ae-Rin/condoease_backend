@@ -415,10 +415,11 @@ async def create_announcement(
                 description,
                 file_url,
                 user_id,
-                created_at
+                created_at,
+                is_archived
             )
             OUTPUT INSERTED.id
-            VALUES (%s, %s, %s, %s, SYSDATETIME())
+            VALUES (%s, %s, %s, %s, SYSDATETIME(), 0)
         """, (title, description, file_url, user_id))
         ann_id = cursor.fetchone()["id"]
         db.commit()
