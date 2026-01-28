@@ -408,21 +408,34 @@ async def create_announcement(
     if file:
         file.file.seek(0)
         file_url = upload_to_blob(file, "announcements")
-    cursor.execute("""
-        INSERT INTO post_announcements (title, description, file_url, user_id, created_at)
-        VALUES (%s, %s, %s, %s, GETDATE())
-    """, (title, description, file_url, user_id))
-    db.commit()
-    cursor.execute("SELECT SCOPE_IDENTITY() AS id")
-    ann_id = cursor.fetchone()["id"]
-    cursor.execute("SELECT * FROM post_announcements WHERE id = %s", (ann_id,))
-    row = cursor.fetchone()
-    new_post = clean_row(row)
-    await ws_manager.broadcast({
-        "event": "new_announcement",
-        "data": new_post
-    })
-    return new_post
+    try:
+        cursor.execute("""
+            INSERT INTO post_announcements (
+                title,
+                description,
+                file_url,
+                user_id,
+                created_at
+            )
+            OUTPUT INSERTED.id
+            VALUES (%s, %s, %s, %s, SYSDATETIME())
+        """, (title, description, file_url, user_id))
+        ann_id = cursor.fetchone()["id"]
+        db.commit()
+        cursor.execute(
+            "SELECT * FROM post_announcements WHERE id = %s",
+            (ann_id,)
+        )
+        row = cursor.fetchone()
+        new_post = clean_row(row)
+        await ws_manager.broadcast({
+            "event": "new_announcement",
+            "data": new_post
+        })
+        return new_post
+    except Exception as e:
+        print("Announcement insert error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to post announcement")
 
 @app.put("/api/announcements/{announcement_id}")
 async def update_announcement(
