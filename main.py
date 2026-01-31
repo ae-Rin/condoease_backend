@@ -393,7 +393,7 @@ def get_completed_maintenance_request_by_id(request_id: int, token: dict = Depen
     except Exception as e:
         print("Error fetching request by ID:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance request")
-
+    
 @app.post("/api/announcements")
 async def create_announcement(
     title: str = Form(...),
@@ -408,65 +408,35 @@ async def create_announcement(
     if file:
         file.file.seek(0)
         file_url = upload_to_blob(file, "announcements")
-    cursor.execute("""
-        INSERT INTO post_announcements (title, description, file_url, user_id, created_at)
-        VALUES (%s, %s, %s, %s, GETDATE())
-    """, (title, description, file_url, user_id))
-    db.commit()
-    cursor.execute("SELECT SCOPE_IDENTITY() AS id")
-    ann_id = cursor.fetchone()["id"]
-    cursor.execute("SELECT * FROM post_announcements WHERE id = %s", (ann_id,))
-    row = cursor.fetchone()
-    new_post = clean_row(row)
-    await ws_manager.broadcast({
-        "event": "new_announcement",
-        "data": new_post
-    })
-    return new_post
-
-# @app.post("/api/announcements")
-# async def create_announcement(
-#     title: str = Form(...),
-#     description: str = Form(...),
-#     file: UploadFile = File(None),
-#     token: dict = Depends(verify_token)
-# ):
-#     user_id = token.get("id")
-#     db = get_db()
-#     cursor = db.cursor(as_dict=True)
-#     file_url = None
-#     if file:
-#         file.file.seek(0)
-#         file_url = upload_to_blob(file, "announcements")
-#     try:
-#         cursor.execute("""
-#             INSERT INTO post_announcements (
-#                 title,
-#                 description,
-#                 file_url,
-#                 user_id,
-#                 created_at,
-#                 is_archived
-#             )
-#             OUTPUT INSERTED.id
-#             VALUES (%s, %s, %s, %s, SYSDATETIME(), 0)
-#         """, (title, description, file_url, user_id))
-#         ann_id = cursor.fetchone()["id"]
-#         db.commit()
-#         cursor.execute(
-#             "SELECT * FROM post_announcements WHERE id = %s",
-#             (ann_id,)
-#         )
-#         row = cursor.fetchone()
-#         new_post = clean_row(row)
-#         await ws_manager.broadcast({
-#             "event": "new_announcement",
-#             "data": new_post
-#         })
-#         return new_post
-#     except Exception as e:
-#         print("Announcement insert error:", str(e))
-#         raise HTTPException(status_code=500, detail="Failed to post announcements")
+    try:
+        cursor.execute("""
+            INSERT INTO post_announcements (
+                title,
+                description,
+                file_url,
+                user_id,
+                created_at,
+                is_archived
+            )
+            OUTPUT INSERTED.id
+            VALUES (%s, %s, %s, %s, SYSDATETIME(), 0)
+        """, (title, description, file_url, user_id))
+        ann_id = cursor.fetchone()["id"]
+        db.commit()
+        cursor.execute(
+            "SELECT * FROM post_announcements WHERE id = %s",
+            (ann_id,)
+        )
+        row = cursor.fetchone()
+        new_post = clean_row(row)
+        await ws_manager.broadcast({
+            "event": "new_announcement",
+            "data": new_post
+        })
+        return new_post
+    except Exception as e:
+        print("Announcement insert error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to post announcements")
 
 @app.put("/api/announcements/{announcement_id}")
 async def update_announcement(
