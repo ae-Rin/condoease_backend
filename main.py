@@ -405,9 +405,13 @@ async def create_announcement(
     db = get_db()
     cursor = db.cursor(as_dict=True)
 
-    file_url = upload_to_blob(file, "announcements") if file else None
-
     try:
+        file_url = None
+        if file:
+            print("Uploading file:", file.filename)
+            file_url = upload_to_blob(file, "announcements")
+            print("Uploaded file URL:", file_url)
+
         cursor.execute("""
             SET NOCOUNT ON;
 
@@ -434,29 +438,23 @@ async def create_announcement(
             "file_url": file_url,
             "user_id": user_id
         })
-
         row = cursor.fetchone()
         if not row:
             raise Exception("Insert succeeded but no ID returned")
-
         ann_id = row["id"]
         db.commit()
-
         cursor.execute(
             "SELECT * FROM post_announcements WHERE id = @id",
             {"id": ann_id}
         )
         new_post = clean_row(cursor.fetchone())
-
         await ws_manager.broadcast({
             "event": "new_announcement",
             "data": new_post
         })
-
         return new_post
-
     except Exception as e:
-        print("Announcement insert error:", e)
+        print("🔥 Announcement insert error:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/announcements/{announcement_id}")
