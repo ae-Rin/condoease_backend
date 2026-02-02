@@ -413,24 +413,11 @@ async def create_announcement(
             print("Uploaded file URL:", file_url)
 
         cursor.execute("""
-            SET NOCOUNT ON;
-
             INSERT INTO post_announcements (
-                title,
-                description,
-                file_url,
-                user_id,
-                created_at,
-                is_archived
+                title, description, file_url, user_id, created_at, is_archived
             )
-            OUTPUT INSERTED.id
             VALUES (
-                @title,
-                @description,
-                @file_url,
-                @user_id,
-                SYSDATETIME(),
-                0
+                @title, @description, @file_url, @user_id, SYSDATETIME(), 0
             )
         """, {
             "title": title,
@@ -438,20 +425,18 @@ async def create_announcement(
             "file_url": file_url,
             "user_id": user_id
         })
-        row = cursor.fetchone()
-        if not row:
-            raise Exception("Insert succeeded but no ID returned")
-        ann_id = row["id"]
+        cursor.execute("SELECT SCOPE_IDENTITY() AS id")
+        ann_id = int(cursor.fetchone()["id"])
         db.commit()
         cursor.execute(
-            "SELECT * FROM post_announcements WHERE id = @id",
-            {"id": ann_id}
+            "SELECT * FROM post_announcements WHERE id = %s",
+            (ann_id,)
         )
         new_post = clean_row(cursor.fetchone())
-        await ws_manager.broadcast({
-            "event": "new_announcement",
-            "data": new_post
-        })
+        # await ws_manager.broadcast({
+        #     "event": "new_announcement",
+        #     "data": new_post
+        # })
         return new_post
     except Exception as e:
         print("🔥 Announcement insert error:", repr(e))
