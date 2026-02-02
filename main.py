@@ -408,7 +408,7 @@ async def create_announcement(
     try:
         file_url = None
         if file:
-            file_url = upload_to_blob(file, "announcements")
+            file_url = upload_to_blob(file, "announcements", user_id)
 
         cursor.execute("""
             INSERT INTO post_announcements (
@@ -419,34 +419,29 @@ async def create_announcement(
                 created_at,
                 is_archived
             )
-            VALUES (
-                @title,
-                @description,
-                @file_url,
-                @user_id,
-                SYSDATETIME(),
-                0
-            )
-        """, {
-            "title": title,
-            "description": description,
-            "file_url": file_url,
-            "user_id": user_id
-        })
+            VALUES (%s, %s, %s, %s, SYSDATETIME(), 0)
+        """, (
+            title,
+            description,
+            file_url,
+            user_id
+        ))
 
         cursor.execute("SELECT SCOPE_IDENTITY() AS id")
         ann_id = int(cursor.fetchone()["id"])
         db.commit()
 
         cursor.execute(
-            "SELECT * FROM post_announcements WHERE id = @id",
-            {"id": ann_id}
+            "SELECT * FROM post_announcements WHERE id = %s",
+            (ann_id,)
         )
         new_post = clean_row(cursor.fetchone())
         return new_post
+
     except Exception as e:
-        print("🔥 Announcement insert error:", repr(e))
+        print("Announcement insert error:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
+        # raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.put("/api/announcements/{announcement_id}")
