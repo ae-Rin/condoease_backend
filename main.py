@@ -520,16 +520,41 @@ async def archive_announcement(
         db.rollback()
         raise HTTPException(status_code=500, detail="Archive failed")
 
+# @app.get("/api/announcements")
+# def get_announcements(token: dict = Depends(verify_token)):
+#     user_id = token.get("id")
+#     db = get_db()
+#     cursor = db.cursor(as_dict=True)
+#     cursor.execute("""
+#         SELECT * FROM post_announcements
+#         WHERE user_id = %s AND is_archived = 0
+#         ORDER BY created_at DESC
+#     """, (user_id,))
+#     return cursor.fetchall()
+
 @app.get("/api/announcements")
-def get_announcements(token: dict = Depends(verify_token)):
-    user_id = token.get("id")
+def get_announcements(token: dict = Depends(optional_verify_token)):
     db = get_db()
     cursor = db.cursor(as_dict=True)
-    cursor.execute("""
-        SELECT * FROM post_announcements
-        WHERE user_id = %s AND is_archived = 0
-        ORDER BY created_at DESC
-    """, (user_id,))
+
+    if token:
+        # Web (manager/owner)
+        user_id = token.get("id")
+        cursor.execute("""
+            SELECT id, title, description, file_url, created_at
+            FROM post_announcements
+            WHERE user_id = %s AND is_archived = 0
+            ORDER BY created_at DESC
+        """, (user_id,))
+    else:
+        # Mobile (tenant / public feed)
+        cursor.execute("""
+            SELECT id, title, description, file_url, created_at
+            FROM post_announcements
+            WHERE is_archived = 0
+            ORDER BY created_at DESC
+        """)
+
     return cursor.fetchall()
 
 router = APIRouter()
@@ -1787,17 +1812,17 @@ async def submit_maintenance_request(
         print("❌ Maintenance request error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to submit maintenance request")
     
-@app.get("/api/announcements")
-async def get_announcements():
-    conn = get_db()
-    cursor = conn.cursor(as_dict=True)
-    cursor.execute("""
-        SELECT id, title, description, file_url, created_at
-        FROM post_announcements
-        ORDER BY created_at DESC
-    """)
-    rows = cursor.fetchall()
-    return {"announcements": rows}
+# @app.get("/api/announcements")
+# async def get_announcements():
+#     conn = get_db()
+#     cursor = conn.cursor(as_dict=True)
+#     cursor.execute("""
+#         SELECT id, title, description, file_url, created_at
+#         FROM post_announcements
+#         ORDER BY created_at DESC
+#     """)
+#     rows = cursor.fetchall()
+#     return {"announcements": rows}
     
 app.include_router(router)
 
