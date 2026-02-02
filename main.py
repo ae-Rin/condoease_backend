@@ -533,7 +533,7 @@ async def archive_announcement(
 #     return cursor.fetchall()
 
 @app.get("/api/announcements")
-def get_announcements(token: dict = Depends(optional_verify_token)):
+def get_announcements(token: dict = Depends(verify_token)):
     db = get_db()
     cursor = db.cursor(as_dict=True)
 
