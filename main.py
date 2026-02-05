@@ -404,12 +404,11 @@ async def create_announcement(
     user_id = token.get("id")
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
+    file_url = None
+    if file:
+        file.file.seek(0)
+        file_url = upload_to_blob(file, "announcements")
     try:
-        file_url = None
-        if file:
-            file_url = upload_to_blob(file, "announcements", user_id)
-
         cursor.execute("""
             INSERT INTO post_announcements (
                 title,
@@ -419,30 +418,25 @@ async def create_announcement(
                 created_at,
                 is_archived
             )
+            OUTPUT INSERTED.id
             VALUES (%s, %s, %s, %s, SYSDATETIME(), 0)
-        """, (
-            title,
-            description,
-            file_url,
-            user_id
-        ))
-
-        cursor.execute("SELECT SCOPE_IDENTITY() AS id")
-        ann_id = int(cursor.fetchone()["id"])
+        """, (title, description, file_url, user_id))
+        ann_id = cursor.fetchone()["id"]
         db.commit()
-
         cursor.execute(
             "SELECT * FROM post_announcements WHERE id = %s",
             (ann_id,)
         )
-        new_post = clean_row(cursor.fetchone())
+        row = cursor.fetchone()
+        new_post = clean_row(row)
+        await ws_manager.broadcast({
+            "event": "new_announcement",
+            "data": new_post
+        })
         return new_post
-
     except Exception as e:
-        print("Announcement insert error:", repr(e))
-        raise HTTPException(status_code=500, detail=str(e))
-        # raise HTTPException(status_code=500, detail=str(e))
-
+        print("Announcement insert error:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to post announcements")
 
 @app.put("/api/announcements/{announcement_id}")
 async def update_announcement(
@@ -520,41 +514,16 @@ async def archive_announcement(
         db.rollback()
         raise HTTPException(status_code=500, detail="Archive failed")
 
-# @app.get("/api/announcements")
-# def get_announcements(token: dict = Depends(verify_token)):
-#     user_id = token.get("id")
-#     db = get_db()
-#     cursor = db.cursor(as_dict=True)
-#     cursor.execute("""
-#         SELECT * FROM post_announcements
-#         WHERE user_id = %s AND is_archived = 0
-#         ORDER BY created_at DESC
-#     """, (user_id,))
-#     return cursor.fetchall()
-
 @app.get("/api/announcements")
 def get_announcements(token: dict = Depends(verify_token)):
+    user_id = token.get("id")
     db = get_db()
     cursor = db.cursor(as_dict=True)
-
-    if token:
-        # Web (manager/owner)
-        user_id = token.get("id")
-        cursor.execute("""
-            SELECT id, title, description, file_url, created_at
-            FROM post_announcements
-            WHERE user_id = %s AND is_archived = 0
-            ORDER BY created_at DESC
-        """, (user_id,))
-    else:
-        # Mobile (tenant / public feed)
-        cursor.execute("""
-            SELECT id, title, description, file_url, created_at
-            FROM post_announcements
-            WHERE is_archived = 0
-            ORDER BY created_at DESC
-        """)
-
+    cursor.execute("""
+        SELECT * FROM post_announcements
+        WHERE user_id = %s AND is_archived = 0
+        ORDER BY created_at DESC
+    """, (user_id,))
     return cursor.fetchall()
 
 router = APIRouter()
@@ -1482,7 +1451,62 @@ async def create_lease(
     try:
         cursor.execute(query, params)
         db.commit()
-        return {"message": "Lease created successfully"}
+        
+        # Get the newly created lease ID
+        cursor.execute("SELECT @@IDENTITY AS id")
+        lease_id = cursor.fetchone()[0]
+        
+        # Auto-generate invoice for the lease (if SQLAlchemy is available)
+        invoice_created = False
+        invoice_id = None
+        invoice_amount = None
+        invoice_due_date = None
+        
+        try:
+            from datetime import datetime
+            from decimal import Decimal
+            from database import get_session_context
+            from services import InvoiceService
+            
+            # Parse start date
+            lease_start = datetime.strptime(startDate, "%Y-%m-%d").date()
+            
+            # Create invoice using the service layer
+            with get_session_context() as sqlalchemy_db:
+                invoice = InvoiceService.create_initial_lease_invoice(
+                    db=sqlalchemy_db,
+                    lease_id=lease_id,
+                    tenant_id=tenant,
+                    rent_price=Decimal(str(rentPrice)),
+                    start_date=lease_start
+                )
+                invoice_created = True
+                invoice_id = invoice.id
+                invoice_amount = float(invoice.amount)
+                invoice_due_date = invoice.due_date.isoformat()
+                
+            print(f"✅ Auto-generated invoice #{invoice_id} for lease #{lease_id}")
+            
+        except Exception as invoice_error:
+            # If invoice creation fails, log but don't fail the lease creation
+            print(f"Failed to auto-generate invoice: {invoice_error}")
+            # Lease was still created successfully
+        
+        # Return response (backward compatible)
+        response = {"message": "Lease created successfully"}
+        
+        # Add invoice info if it was created (non-breaking addition)
+        if invoice_created:
+            response["invoice_created"] = True
+            response["invoice"] = {
+                "id": invoice_id,
+                "amount": invoice_amount,
+                "due_date": invoice_due_date,
+                "status": "PENDING"
+            }
+        
+        return response
+        
     except Exception as e:
         db.rollback()
         return {"error": str(e)}
@@ -1675,7 +1699,7 @@ def get_maintenance_requests(token: dict = Depends(verify_token)):
         """)
         return {"requests": cursor.fetchall()}
     except Exception as e:
-        print("❌ Error fetching maintenance requests:", str(e))
+        print("Error fetching maintenance requests:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance requests")
     
 @app.get("/api/maintenance-requests/{request_id}")
@@ -1717,7 +1741,7 @@ def get_maintenance_request_by_id(request_id: int, token: dict = Depends(verify_
         result["attachments"] = attachments
         return result
     except Exception as e:
-        print("❌ Error fetching request by ID:", str(e))
+        print("Error fetching request by ID:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance request")
     
 @app.get("/api/maintenance-ongoing/{request_id}")
@@ -1761,7 +1785,7 @@ def get_ongoing_maintenance_request_by_id(request_id: int, token: dict = Depends
         return result
 
     except Exception as e:
-        print("❌ Error fetching request by ID:", str(e))
+        print("Error fetching request by ID:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance request")
 
 # Specific Mobile Routes
@@ -1809,22 +1833,32 @@ async def submit_maintenance_request(
             "attachments": saved_files
         }
     except Exception as e:
-        print("❌ Maintenance request error:", str(e))
+        print("Maintenance request error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to submit maintenance request")
     
-# @app.get("/api/announcements")
-# async def get_announcements():
-#     conn = get_db()
-#     cursor = conn.cursor(as_dict=True)
-#     cursor.execute("""
-#         SELECT id, title, description, file_url, created_at
-#         FROM post_announcements
-#         ORDER BY created_at DESC
-#     """)
-#     rows = cursor.fetchall()
-#     return {"announcements": rows}
+@app.get("/api/announcements")
+async def get_announcements():
+    conn = get_db()
+    cursor = conn.cursor(as_dict=True)
+    cursor.execute("""
+        SELECT id, title, description, file_url, created_at
+        FROM post_announcements
+        ORDER BY created_at DESC
+    """)
+    rows = cursor.fetchall()
+    return {"announcements": rows}
     
 app.include_router(router)
+
+# Include Invoice & Payments routers (SQLAlchemy-based)
+try:
+    from routers import invoices_router, payments_router
+    app.include_router(invoices_router)
+    app.include_router(payments_router)
+    print("Invoice and Payments routers registered successfully")
+except Exception as e:
+    print(f"Invoice/Payments routers not loaded: {e}")
+    print("   Run: pip install SQLAlchemy alembic")
 
 # 404 Fallback Middleware
 @app.middleware("http")
