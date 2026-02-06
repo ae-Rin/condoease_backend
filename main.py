@@ -1661,20 +1661,66 @@ def get_vacant_property_units(token: dict = Depends(verify_token)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# @app.get("/api/leases")
+# def get_all_leases(token: dict = Depends(verify_token)):
+#     db = get_db()
+#     cursor = db.cursor(as_dict=True)
+#     cursor.execute("""
+#         SELECT lt.*, p.property_name, pu.unit_number, pu.unit_type, t.email
+#         FROM leases lt
+#         LEFT JOIN properties p ON lt.property_id = p.property_id
+#         LEFT JOIN property_units pu ON lt.property_unit_id = pu.property_unit_id
+#         LEFT JOIN tenants t ON lt.tenant_id = t.tenant_id
+#         ORDER BY lt.created_at DESC
+#     """)
+#     return cursor.fetchall()
+# @app.get("/api/leases")
+# def get_all_leases(token: dict = Depends(verify_token)):
+#     try:
+#         db = get_db()
+#         cursor = db.cursor(as_dict=True)
+
+#         cursor.execute("""
+#             SELECT 
+#                 lt.lease_id,
+#                 lt.start_date,
+#                 lt.end_date,
+#                 lt.rent_price,
+#                 lt.bill_gas_amount,
+#                 lt.bill_electricity_amount,
+#                 lt.bill_internet_amount,
+#                 lt.bill_tax_amount,
+
+#                 pu.unit_number,
+#                 pu.unit_type,
+
+#                 t.email AS tenant_email
+
+#             FROM leases lt
+#             LEFT JOIN properties p 
+#                 ON lt.property_id = p.property_id
+#             LEFT JOIN property_units pu 
+#                 ON lt.property_unit_id = pu.property_unit_id
+#             LEFT JOIN tenants t 
+#                 ON lt.tenant_id = t.tenant_id
+
+#             ORDER BY lt.created_at DESC
+#         """)
+#         return cursor.fetchall()
+#     except Exception as e:
+#         print("Lease fetch error:", repr(e))
+#         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/leases")
 def get_all_leases(token: dict = Depends(verify_token)):
-    db = get_db()
-    cursor = db.cursor(as_dict=True)
-    cursor.execute("""
-        SELECT lt.*, p.property_name, pu.unit_number, pu.unit_type, t.email
-        FROM leases lt
-        LEFT JOIN properties p ON lt.property_id = p.property_id
-        LEFT JOIN property_units pu ON lt.property_unit_id = pu.property_unit_id
-        LEFT JOIN tenants t ON lt.tenant_id = t.tenant_id
-        ORDER BY lt.created_at DESC
-    """)
-    return cursor.fetchall()
+    try:
+        db = get_db()
+        cursor = db.cursor(as_dict=True)
+        cursor.execute("SELECT * FROM leases")
+        return cursor.fetchall()
+    except Exception as e:
+        print("Lease fetch error:", repr(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/maintenance-requests")
 def get_maintenance_requests(token: dict = Depends(verify_token)):
