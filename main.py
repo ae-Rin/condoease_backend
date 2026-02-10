@@ -194,6 +194,41 @@ def login_user(body: LoginRequest):
             "role": user["role"],
         },
     }
+    
+@app.get("/api/users/me")
+def get_my_profile(token: dict = Depends(verify_token)):
+    user_id = token.get("id")
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute("""
+        SELECT 
+            id,
+            first_name,
+            last_name,
+            email,
+            avatar,
+            role,
+            created_at,
+            email_verified,
+            is_active
+        FROM users
+        WHERE id = %s
+    """, (user_id,))
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "id": row[0],
+        "firstName": row[1],
+        "lastName": row[2],
+        "email": row[3],
+        "avatar": row[4],
+        "role": row[5],
+        "created_at": row[6],
+        "email_verified": row[7],
+        "is_active": row[8],
+    }
 
 @app.put("/api/users/avatar")
 def update_avatar(avatar: UploadFile = File(...), token: dict = Depends(verify_token)):
