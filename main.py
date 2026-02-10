@@ -17,7 +17,7 @@ import uvicorn
 from uuid import uuid4
 from datetime import datetime, timedelta
 from decimal import Decimal
-from azure_blob import upload_to_blob
+from azure_blob import delete_from_blob, upload_to_blob
 from utils.email import send_otp_email
 
 # Load .env
@@ -194,7 +194,7 @@ def login_user(body: LoginRequest):
             "role": user["role"],
         },
     }
-    
+
 @app.get("/api/users/me")
 def get_my_profile(token: dict = Depends(verify_token)):
     user_id = token.get("id")
@@ -207,7 +207,7 @@ def get_my_profile(token: dict = Depends(verify_token)):
             first_name,
             last_name,
             email,
-            avatar,
+            avatar_url,
             role,
             created_at,
             email_verified,
@@ -217,31 +217,102 @@ def get_my_profile(token: dict = Depends(verify_token)):
     """, (user_id,))
     row = cursor.fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(404, "User not found")
+    avatar_url = row[4] or upload_to_blob(UploadFile(filename="default_avatar.png", file=open("default_avatar.png", "rb")), "avatars", "default")
     return {
         "id": row[0],
         "firstName": row[1],
         "lastName": row[2],
         "email": row[3],
-        "avatar": row[4],
+        "avatar_url": avatar_url,
         "role": row[5],
         "created_at": row[6],
         "email_verified": row[7],
         "is_active": row[8],
     }
 
+# @app.put("/api/users/avatar")
+# def update_avatar(avatar: UploadFile = File(...), token: dict = Depends(verify_token)):
+#     user_id = token.get("id")
+#     filename = f"{int(time.time())}-{avatar.filename.replace(' ', '_')}"
+#     file_path = os.path.join(UPLOAD_DIR, filename)
+#     with open(file_path, "wb") as buffer:
+#         shutil.copyfileobj(avatar.file, buffer)
+#     db = get_db()
+#     cursor = db.cursor()
+#     cursor.execute("UPDATE users SET avatar = %s WHERE id = %s", (f"/uploads/{filename}", user_id))
+#     db.commit()
+#     return {"avatar": f"/uploads/{filename}"}
+# @app.put("/api/users/avatar")
+# def update_avatar(
+#     avatar: UploadFile = File(...),
+#     token: dict = Depends(verify_token)
+# ):
+#     user_id = token.get("id")
+#     if not avatar:
+#         raise HTTPException(400, "No file uploaded")
+#     try:
+#         avatar_url = upload_to_blob(avatar, "avatars", user_id)
+#         db = get_db()
+#         cursor = db.cursor()
+
+#         cursor.execute("""
+#             UPDATE users
+#             SET avatar_url = %s
+#             WHERE id = %s
+#         """, (avatar_url, user_id))
+#         db.commit()
+#         return {
+#             "success": True,
+#             "avatar_url": avatar_url
+#         }
+#     except Exception as e:
+#         print("Avatar upload error:", e)
+#         raise HTTPException(500, "Failed to upload avatar")
 @app.put("/api/users/avatar")
-def update_avatar(avatar: UploadFile = File(...), token: dict = Depends(verify_token)):
+def update_avatar(
+    avatar: UploadFile = File(...),
+    token: dict = Depends(verify_token)
+):
     user_id = token.get("id")
-    filename = f"{int(time.time())}-{avatar.filename.replace(' ', '_')}"
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(avatar.file, buffer)
+    if not avatar:
+        raise HTTPException(400, "No file uploaded")
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("UPDATE users SET avatar = %s WHERE id = %s", (f"/uploads/{filename}", user_id))
-    db.commit()
-    return {"avatar": f"/uploads/{filename}"}
+
+    try:
+        cursor.execute(
+            "SELECT avatar_url FROM users WHERE id = %s",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        old_avatar = row[0] if row else None
+        avatar_url = upload_to_blob(
+            file=avatar,
+            container="avatars",
+            user_id=user_id
+        )
+        cursor.execute("""
+            UPDATE users
+            SET avatar_url = %s
+            WHERE id = %s
+        """, (avatar_url, user_id))
+        db.commit()
+        if old_avatar and "default-avatar" not in old_avatar:
+            delete_from_blob(old_avatar)
+        if old_avatar:
+            try:
+                delete_from_blob(old_avatar)
+            except:
+                pass  
+        return {
+            "success": True,
+            "avatar_url": avatar_url
+        }
+    except Exception as e:
+        print("Avatar upload error:", e)
+        raise HTTPException(500, "Failed to upload avatar")
+
 
 @app.put("/api/users/{user_id}")
 def update_user_profile(user_id: int, firstName: Optional[str] = Form(None), lastName: Optional[str] = Form(None), email: Optional[str] = Form(None), password: Optional[str] = Form(None), currentPassword: Optional[str] = Form(None), token: dict = Depends(verify_token)):

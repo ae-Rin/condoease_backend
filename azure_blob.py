@@ -11,14 +11,9 @@ blob_service = BlobServiceClient.from_connection_string(
      f"EndpointSuffix=core.windows.net"
 )
 
-# def upload_to_blob(file, container):
 def upload_to_blob(file, container: str, user_id: str | int):
      ext = os.path.splitext(file.filename)[1]
-     # filename = f"{uuid.uuid4()}{ext}"
      filename = f"{user_id}/{uuid.uuid4()}{ext}"
-     # blob_client = blob_service.get_blob_client(container, filename)
-     # content = file.file.read()
-     # blob_client.upload_blob(content, overwrite=True)
      blob_client = blob_service.get_blob_client(container=container, blob=filename)
      blob_client.upload_blob(file.file, overwrite=True)
      return f"https://{account}.blob.core.windows.net/{container}/{filename}"
