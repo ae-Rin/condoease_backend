@@ -32,6 +32,8 @@ itsdangerous==2.2.0
 # === DATABASES ===
 mysql-connector-python==9.3.0
 pyodbc==5.2.0
+SQLAlchemy==2.0.36
+alembic==1.14.0
 
 # === GOOGLE / FIREBASE ===
 firebase-admin==6.8.0

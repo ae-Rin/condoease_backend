@@ -1451,7 +1451,62 @@ async def create_lease(
     try:
         cursor.execute(query, params)
         db.commit()
-        return {"message": "Lease created successfully"}
+        
+        # Get the newly created lease ID
+        cursor.execute("SELECT @@IDENTITY AS id")
+        lease_id = cursor.fetchone()[0]
+        
+        # Auto-generate invoice for the lease (if SQLAlchemy is available)
+        invoice_created = False
+        invoice_id = None
+        invoice_amount = None
+        invoice_due_date = None
+        
+        try:
+            from datetime import datetime
+            from decimal import Decimal
+            from database import get_session_context
+            from services import InvoiceService
+            
+            # Parse start date
+            lease_start = datetime.strptime(startDate, "%Y-%m-%d").date()
+            
+            # Create invoice using the service layer
+            with get_session_context() as sqlalchemy_db:
+                invoice = InvoiceService.create_initial_lease_invoice(
+                    db=sqlalchemy_db,
+                    lease_id=lease_id,
+                    tenant_id=tenant,
+                    rent_price=Decimal(str(rentPrice)),
+                    start_date=lease_start
+                )
+                invoice_created = True
+                invoice_id = invoice.id
+                invoice_amount = float(invoice.amount)
+                invoice_due_date = invoice.due_date.isoformat()
+                
+            print(f"✅ Auto-generated invoice #{invoice_id} for lease #{lease_id}")
+            
+        except Exception as invoice_error:
+            # If invoice creation fails, log but don't fail the lease creation
+            print(f"Failed to auto-generate invoice: {invoice_error}")
+            # Lease was still created successfully
+        
+        # Return response (backward compatible)
+        response = {"message": "Lease created successfully"}
+        
+        # Add invoice info if it was created (non-breaking addition)
+        if invoice_created:
+            response["invoice_created"] = True
+            response["invoice"] = {
+                "id": invoice_id,
+                "amount": invoice_amount,
+                "due_date": invoice_due_date,
+                "status": "PENDING"
+            }
+        
+        return response
+        
     except Exception as e:
         db.rollback()
         return {"error": str(e)}
@@ -1644,7 +1699,7 @@ def get_maintenance_requests(token: dict = Depends(verify_token)):
         """)
         return {"requests": cursor.fetchall()}
     except Exception as e:
-        print("❌ Error fetching maintenance requests:", str(e))
+        print("Error fetching maintenance requests:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance requests")
     
 @app.get("/api/maintenance-requests/{request_id}")
@@ -1686,7 +1741,7 @@ def get_maintenance_request_by_id(request_id: int, token: dict = Depends(verify_
         result["attachments"] = attachments
         return result
     except Exception as e:
-        print("❌ Error fetching request by ID:", str(e))
+        print("Error fetching request by ID:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance request")
     
 @app.get("/api/maintenance-ongoing/{request_id}")
@@ -1730,7 +1785,7 @@ def get_ongoing_maintenance_request_by_id(request_id: int, token: dict = Depends
         return result
 
     except Exception as e:
-        print("❌ Error fetching request by ID:", str(e))
+        print("Error fetching request by ID:", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch maintenance request")
 
 # Specific Mobile Routes
@@ -1778,7 +1833,7 @@ async def submit_maintenance_request(
             "attachments": saved_files
         }
     except Exception as e:
-        print("❌ Maintenance request error:", str(e))
+        print("Maintenance request error:", str(e))
         raise HTTPException(status_code=500, detail="Failed to submit maintenance request")
     
 @app.get("/api/announcements")
@@ -1794,6 +1849,22 @@ async def get_announcements():
     return {"announcements": rows}
     
 app.include_router(router)
+
+# Include Invoice & Payments routers (SQLAlchemy-based)
+try:
+    from routers import invoices_router, payments_router
+    from routers.webhooks import router as webhooks_router
+    from routers.checkout import router as checkout_router
+    
+    app.include_router(invoices_router)
+    app.include_router(payments_router)
+    app.include_router(webhooks_router)
+    app.include_router(checkout_router)
+    print("✅ Invoice, Payments, Webhooks, and Checkout routers registered successfully")
+except Exception as e:
+    print(f"⚠️  Some routers not loaded: {e}")
+    print("   Run: pip install SQLAlchemy alembic")
+    print("   Ensure routers/webhooks.py and routers/checkout.py exist")
 
 # 404 Fallback Middleware
 @app.middleware("http")

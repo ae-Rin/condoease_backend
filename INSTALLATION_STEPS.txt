@@ -1,0 +1,125 @@
+================================================================================
+  INVOICE FEATURE - INSTALLATION STEPS
+================================================================================
+
+Follow these steps to activate the new Invoice feature:
+
+STEP 1: Install Dependencies
+----------------------------
+Open PowerShell/Command Prompt and run:
+
+    cd C:\Users\Administrator\Desktop\condoease_backend
+    pip install SQLAlchemy==2.0.36 alembic==1.14.0
+
+Or install all requirements:
+
+    pip install -r requirements.txt
+
+
+STEP 2: Run Database Migration
+-------------------------------
+Create the invoices table:
+
+    alembic upgrade head
+
+Expected output:
+    INFO  [alembic.runtime.migration] Running upgrade  -> 20260131_000001
+
+
+STEP 3: Test the Setup
+-----------------------
+Run the test script:
+
+    python test_invoice_setup.py
+
+You should see:
+    ✅ SQLAlchemy 2.0.36
+    ✅ Alembic 1.14.0
+    ✅ Models imported successfully
+    ✅ Database connection successful
+    🎉 All tests passed!
+
+
+STEP 4: Start the Server
+-------------------------
+    python main.py
+
+Look for this message:
+    ✅ Invoice router registered successfully
+
+
+STEP 5: Test the API
+---------------------
+Use Postman, curl, or your browser to test:
+
+    POST http://localhost:10000/api/invoices
+    GET  http://localhost:10000/api/invoices
+    GET  http://localhost:10000/api/invoices/1
+
+(Don't forget to include your JWT token in the Authorization header!)
+
+
+================================================================================
+  DOCUMENTATION
+================================================================================
+
+📖 SETUP_SQLALCHEMY.md         - Complete setup guide with troubleshooting
+📖 INVOICE_API_REFERENCE.md    - Full API documentation with examples
+📖 README_INVOICE_FEATURE.md   - Feature overview and architecture
+
+
+================================================================================
+  QUICK REFERENCE
+================================================================================
+
+New Endpoints:
+  POST   /api/invoices                      - Create invoice
+  GET    /api/invoices                      - List invoices (with filters)
+  GET    /api/invoices/{id}                 - Get invoice by ID
+  PUT    /api/invoices/{id}                 - Update invoice
+  PATCH  /api/invoices/{id}/mark-paid       - Mark as paid
+  PATCH  /api/invoices/{id}/mark-overdue    - Mark as overdue
+  DELETE /api/invoices/{id}                 - Delete invoice (admin only)
+  GET    /api/invoices/tenant/{id}/summary  - Get tenant summary
+
+New Files:
+  models/invoice.py      - Invoice SQLAlchemy model
+  schemas/invoice.py     - Pydantic validation schemas
+  routers/invoices.py    - API endpoint handlers
+  database.py            - SQLAlchemy session management
+  alembic/               - Database migration files
+
+
+================================================================================
+  TROUBLESHOOTING
+================================================================================
+
+Problem: "No module named 'sqlalchemy'"
+Solution: pip install SQLAlchemy==2.0.36
+
+Problem: "alembic: command not found"
+Solution: pip install alembic==1.14.0
+
+Problem: "Table 'invoices' already exists"
+Solution: alembic stamp head
+
+Problem: Database connection fails
+Solution: Check your .env file has correct DB credentials
+
+Problem: "Cannot import name 'invoices_router'"
+Solution: Make sure SQLAlchemy is installed (see above)
+
+
+================================================================================
+  SUPPORT
+================================================================================
+
+For detailed help, see the documentation files listed above.
+
+Run the test script to diagnose issues:
+    python test_invoice_setup.py
+
+
+================================================================================
+  STATUS: ✅ READY FOR USE
+================================================================================
